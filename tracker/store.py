@@ -33,7 +33,6 @@ DEFAULT_BOARDS = [
     "ashby:openai = OpenAI",
     "ashby:notion = Notion",
     "ashby:ramp = Ramp",
-    "lever:plaid = Plaid",
 ]
 
 DEFAULT_SETTINGS = {

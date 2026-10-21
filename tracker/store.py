@@ -62,8 +62,8 @@ def now_stamp() -> str:
 
 
 def today() -> str:
-    """UTC date for `appliedOn`, as the old tracker stored it."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    """Local date for `appliedOn`: the day you applied where you are."""
+    return datetime.now().astimezone().strftime("%Y-%m-%d")
 
 
 def touched(row: dict) -> bool:
@@ -126,7 +126,13 @@ class Store:
             write_atomic(self.postings_path, dump_json(postings))
 
     def import_postings(self, incoming) -> dict:
-        """Merge rows exported from the old tracker. Rows already here win."""
+        """Merge rows exported from the old tracker.
+
+        New ids are added. For an id already here, a row you have acted on in
+        SearchShip is kept; a row SearchShip only added automatically is
+        replaced when the imported copy carries your history (status, notes,
+        appliedOn) or prep.
+        """
         if not isinstance(incoming, dict):
             raise ValueError("Expected a JSON object of {id: row}.")
         good = {}
@@ -145,10 +151,13 @@ class Store:
         with self.lock:
             postings = self.load_postings()
             added = [pid for pid in good if pid not in postings]
-            for pid in added:
+            replaced = [pid for pid in good if pid in postings and not touched(postings[pid])
+                        and (touched(good[pid]) or (good[pid].get("prep") and not postings[pid].get("prep")))]
+            for pid in added + replaced:
                 postings[pid] = good[pid]
             self.save_postings(postings)
-        return {"added": len(added), "kept": len(good) - len(added), "total": len(postings)}
+        return {"added": len(added), "replaced": len(replaced),
+                "kept": len(good) - len(added) - len(replaced), "total": len(postings)}
 
     # state ------------------------------------------------------------------
     def load_state(self) -> dict:

@@ -659,6 +659,7 @@ function providerPicker(opts) {
   const rows = {};
   const errs = {};
   const polls = {};          // name -> timeout id while waiting for install/sign-in
+  const pollFor = {};        // name -> the method that started the wait
   const sigs = {};
   let busy = false;
   const alive = () => token === S.token;
@@ -713,7 +714,7 @@ function providerPicker(opts) {
                                 disabled: busy }, 'Sign in');
       btn.addEventListener('click', () => runAction(name, 'login_provider', btn));
       body.append(h('div', { class: 'prov-actions' }, btn));
-      body.append(polls[name]
+      body.append(polls[name] && pollFor[name] === 'login_provider'
         ? h('p', { class: 'hint waiting' }, h('span', { class: 'dot' }),
             'Waiting for you to finish signing in. This updates by itself.')
         : h('p', { class: 'hint' },
@@ -762,6 +763,7 @@ function providerPicker(opts) {
 
   async function runAction(name, method, btn) {
     errs[name] = '';
+    pollFor[name] = method;
     btn.disabled = true;
     const r = await call(method, name);
     if (!alive()) return;
@@ -910,9 +912,8 @@ SCREENS.setup = () => {
     if (token !== S.token) return;
     importBtn.disabled = false;
     if (r.error) { importStatus.className = 'err'; importStatus.textContent = r.error; return; }
-    const added = r.added || 0, kept = r.kept || 0;
     importStatus.className = 'hint ok-text';
-    importStatus.textContent = 'Imported ' + plural(added, 'row') + (kept ? ' (' + kept + ' already here).' : '.');
+    importStatus.textContent = importSummary(r);
   }, 50 * 1024 * 1024);
   importBtn.addEventListener('click', () => importPicker.click());
 
@@ -1099,6 +1100,13 @@ function renderHint() {
   }
 }
 
+// "Imported 238 rows, restored your history on 13 (2 already here)."
+function importSummary(r) {
+  let text = 'Imported ' + plural(r.added || 0, 'row');
+  if (r.replaced) text += ', restored your history on ' + r.replaced;
+  return text + (r.kept ? ' (' + r.kept + ' already here).' : '.');
+}
+
 function renderMeta() {
   const ui = S.ui;
   if (!ui.meta) return;
@@ -1108,7 +1116,10 @@ function renderMeta() {
   else parts.push('Not scanned yet');
   if (st.summary) parts.push(str(st.summary));
   ui.meta.textContent = parts.join(' · ');
-  const errors = Array.isArray(st.errors) ? st.errors.filter(Boolean).map(str) : [];
+  const errors = [
+    ...(Array.isArray(st.errors) ? st.errors : []),
+    ...(Array.isArray(st.draftProblems) ? st.draftProblems.map((p) => 'Draft check: ' + str(p)) : []),
+  ].filter(Boolean).map(str);
   const sig = JSON.stringify(errors);
   if (ui.problems._sig === sig) return;
   ui.problems._sig = sig;
@@ -1326,14 +1337,15 @@ function card(id, r) {
   const acts = h('div', { class: 'actions' });
   const btn = (label, cmd, emphasis) => {
     const b = h('button', { type: 'button', class: 'btn' + (emphasis ? ' go' : ''), 'data-fk': 'card:' + id + ':' + cmd }, label);
-    b.addEventListener('click', () => runAct(id, cmd, null, li, err));
+    // detail > 1: the 2nd click of a double-click lands on the replaced card's new button
+    b.addEventListener('click', (e) => { if (e.detail > 1) return; runAct(id, cmd, null, li, err); });
     return b;
   };
   const draftBtn = (label) => {
     const b = h('button', { type: 'button', class: 'btn', 'data-idle-only': '', 'data-fk': 'card:' + id + ':draft',
                             disabled: !!S.job.running, title: S.job.running ? 'Wait for the current task to finish' : null },
                 label);
-    b.addEventListener('click', () => startDraft(id, b, err));
+    b.addEventListener('click', (e) => { if (e.detail > 1) return; startDraft(id, b, err); });
     return b;
   };
   const aiReady = !!(S.ai && S.ai.ready);
@@ -1503,9 +1515,10 @@ function describeJob(st) {
     return { text, details: problems, detailsLabel: plural(problems.length, 'draft check') };
   }
   const errors = Array.isArray(res.errors) ? res.errors : [];
+  const problems = Array.isArray(res.problems) ? res.problems.map(str) : [];
   let text = 'Scan finished · ' + (str(res.summary) || 'done');
   if (errors.length) text += ' · ' + plural(errors.length, 'problem') + ', listed above';
-  return { text };
+  return { text, details: problems, detailsLabel: plural(problems.length, 'draft check') };
 }
 
 function renderJob() {
@@ -1621,7 +1634,7 @@ SCREENS.settings = (opts) => {
     if (!alive()) return;
     if (r.error) { importStatus.className = 'err'; importStatus.textContent = r.error; return; }
     importStatus.className = 'hint ok-text';
-    importStatus.textContent = 'Imported ' + plural(r.added || 0, 'row') + (r.kept ? ' (' + r.kept + ' already here).' : '.');
+    importStatus.textContent = importSummary(r);
   }, 50 * 1024 * 1024);
   importBtn.addEventListener('click', () => importPicker.click());
 

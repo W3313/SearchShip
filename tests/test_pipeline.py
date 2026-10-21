@@ -459,3 +459,30 @@ def test_run_scan_uses_the_data_folder_skip_list(store):
 def test_summary_line_format():
     assert pipeline.summary_line(3, 2, 1) == "3 new · 2 drafted · 1 closed"
     assert re.fullmatch(r"\d+ new · \d+ drafted · \d+ closed", pipeline.summary_line(0, 0, 0))
+
+
+@pytest.mark.parametrize("simplify_url, vansh_url", [
+    # Ashby, with and without the embed flag and /application suffix
+    ("https://jobs.ashbyhq.com/armadin/571d7673-0a1b-4c2d-8e3f-123456789abc/application?embed=true",
+     "https://jobs.ashbyhq.com/armadin/571d7673-0a1b-4c2d-8e3f-123456789abc"),
+    # Greenhouse embed token vs. the company site's gh_jid
+    ("https://boards.greenhouse.io/embed/job_app?token=6865687002",
+     "https://www.databricks.com/company/careers/open-positions/job?gh_jid=6865687002"),
+    # Workday with and without a locale segment
+    ("https://generalmotors.wd5.myworkdayjobs.com/en-CA/Careers_GM/job/Sunnyvale/ML-Intern_JR-202621695",
+     "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM/job/Sunnyvale-CA/Machine-Learning-Intern_JR-202621695"),
+])
+def test_same_job_under_different_urls_and_titles_is_added_once(simplify_url, vansh_url):
+    fetched = [simplify([listing("s1", "Acme", "Frontend Engineer Intern", url=simplify_url, days_ago=3)]),
+               vansh(sources.fetch_vansh(lambda u: [vansh_listing("v1", "Acme", "Member of Technical Staff Intern, Frontend",
+                                                                   url=vansh_url)]))]
+    new, _, _ = merge({}, fetched, set(), added_at=ADDED)
+    assert list(new) == ["s1"]
+
+
+def test_inactive_simplify_copy_does_not_hide_a_live_copy_elsewhere():
+    url = "https://jobs.lever.co/acme/0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0"
+    fetched = [simplify([listing("s-old", "Acme", "Software Engineer Intern", url=url, active=False)]),
+               vansh(sources.fetch_vansh(lambda u: [vansh_listing("v1", "Acme", "SWE Intern", url=url)]))]
+    new, _, _ = merge({}, fetched, set(), added_at=ADDED)
+    assert list(new) == ["v1"]

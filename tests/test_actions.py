@@ -73,10 +73,10 @@ def test_status_actions(postings, cmd, status):
     assert touched(r)
 
 
-def test_applied_sets_applied_on_to_today_utc(postings):
-    before = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+def test_applied_sets_applied_on_to_the_local_date(postings):
+    before = datetime.now().astimezone().strftime("%Y-%m-%d")
     r = actions.apply(postings, "applied", "greenhouse:stripe:123")
-    after = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    after = datetime.now().astimezone().strftime("%Y-%m-%d")
     assert r["appliedOn"] in {before, after}   # UTC date, even across midnight
     assert re.fullmatch(r"\d{4}-\d\d-\d\d", r["appliedOn"])
     assert r["status"] == "applied"

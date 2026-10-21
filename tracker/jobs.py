@@ -73,7 +73,8 @@ def run_daily(store, log=print, dry_run=False, get=sources.http_get_json, provid
         log("Problem: " + e)
     log(summary + (" (dry run, nothing saved)" if dry_run else ""))
     return {"summary": summary, "new": result["new"], "closed": result["closed"],
-            "toDraft": result["toDraft"], "drafted": drafted, "errors": errors, "newRows": result["newRows"]}
+            "toDraft": result["toDraft"], "drafted": drafted, "errors": errors,
+            "problems": problems, "newRows": result["newRows"]}
 
 
 class JobRunner:

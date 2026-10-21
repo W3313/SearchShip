@@ -84,7 +84,7 @@ def merge(postings: dict, fetched: list, skip_co: set, added_at: str = None,
     added_at = added_at or now_iso()
 
     def row_keys(rows):
-        urls = {sources.url_key(r.get("url", "")) for r in rows if r.get("url")}
+        urls = {sources.job_key(r.get("url", "")) for r in rows if r.get("url")}
         pairs = {_pair(r.get("company"), r.get("title")) for r in rows}
         return urls, pairs
 
@@ -97,7 +97,7 @@ def merge(postings: dict, fetched: list, skip_co: set, added_at: str = None,
     # Engineer Intern" must not hide this year's board posting.)
     live = [x for f in fetched if f.label == "SimplifyJobs" for x in f.listings
             if isinstance(x, dict) and x.get("active") and "Summer 2027" in x.get("terms", [])]
-    live_urls = {sources.url_key(x.get("url", "")) for x in live if x.get("url")}
+    live_urls = {sources.job_key(x.get("url", "")) for x in live if x.get("url")}
     live_pairs = {_pair(x.get("company_name"), x.get("title")) for x in live}
 
     combined, source_of, run_urls = [], {}, set()
@@ -105,7 +105,7 @@ def merge(postings: dict, fetched: list, skip_co: set, added_at: str = None,
         for x in f.listings:
             if not isinstance(x, dict) or "id" not in x or x["id"] in source_of:
                 continue
-            key = sources.url_key(x.get("url", "")) if x.get("url") else None
+            key = sources.job_key(x.get("url", "")) if x.get("url") else None
             pair = _pair(x.get("company_name"), x.get("title"))
             if f.label == "SimplifyJobs":
                 # Already tracked under a board / web / list id from an earlier run.
@@ -114,7 +114,7 @@ def merge(postings: dict, fetched: list, skip_co: set, added_at: str = None,
             elif (key in known_urls or key in live_urls or key in run_urls
                   or pair in known_pairs or pair in live_pairs):
                 continue
-            if key:
+            if key and f.label != "SimplifyJobs":  # live SimplifyJobs keys are in live_urls
                 run_urls.add(key)
             source_of[x["id"]] = f.label
             combined.append(x)

@@ -37,8 +37,9 @@ Your data is stored in `%APPDATA%\SearchShip`. To uninstall, delete the exe and 
    first. You can skip this step: scanning works without AI, and drafting stays off until you
    connect in Settings.
 3. **Resume and import.** Paste your resume or open a `.md`/`.txt` file. It is the only source
-   of facts about you when drafting. Optionally import the `postings.json` from the old tracker;
-   rows you already have are kept as they are.
+   of facts about you when drafting. Optionally import the `postings.json` from the old tracker.
+   Rows you have acted on in SearchShip are kept as they are; a row SearchShip only added
+   automatically takes your old history (status, notes, applied date, prep) from the import.
 4. **Finish.** The tracker opens and the first scan starts.
 
 ## Using the tracker
@@ -113,7 +114,8 @@ Everything is plain files in `%APPDATA%\SearchShip` (Settings > Data > **Open da
 | `resume.md` | Your resume |
 | `skip_companies.txt` | Employers to ignore, one per line |
 | `searchship.log` | Log written by the exe (it has no console) |
-| `webview\` | The window's browser storage |
+
+The window runs in private mode, so it keeps no browser storage between launches.
 
 What is sent to the AI: the prep rules, your resume and the postings being drafted (company,
 title, locations, link, category, posted date). Web search also sends the names of companies

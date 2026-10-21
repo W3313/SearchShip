@@ -22,6 +22,17 @@ IS_WINDOWS = os.name == "nt"
 CREATE_NO_WINDOW = 0x08000000
 CREATE_NEW_CONSOLE = 0x00000010
 
+if IS_WINDOWS:
+    # Explorer starts SearchShip in the exe's folder (often Downloads). Never
+    # resolve a CLI from there, and launch cmd/PowerShell by full path, since
+    # CreateProcess searches the application folder first.
+    os.environ["NoDefaultCurrentDirectoryInExePath"] = "1"
+    _SYS32 = os.path.join(os.environ.get("SystemRoot") or r"C:\Windows", "System32")
+    CMD_EXE = os.path.join(_SYS32, "cmd.exe")
+    POWERSHELL_EXE = os.path.join(_SYS32, "WindowsPowerShell", "v1.0", "powershell.exe")
+else:
+    CMD_EXE, POWERSHELL_EXE = "cmd.exe", "powershell.exe"
+
 
 class AIError(Exception):
     pass
@@ -54,22 +65,42 @@ def child_env() -> dict:
     return env
 
 
-def _argv(exe: str, args: list) -> list:
-    # .cmd/.bat shims (npm installs) must run through cmd.exe
+def _argv(exe: str, args: list):
+    """Command for subprocess. npm installs give .cmd shims, which must run
+    through cmd.exe. With /s and one outer pair of quotes, cmd strips exactly
+    that pair, so a path like C:\\Users\\Jane Doe\\...\\codex.cmd survives.
+    (Arguments must not contain % or unquoted &|<>^; ours are fixed flags and
+    JSON schemas, and prompts go over stdin.)"""
     if IS_WINDOWS and exe.lower().endswith((".cmd", ".bat")):
-        return ["cmd.exe", "/d", "/c", exe, *args]
+        return (subprocess.list2cmdline([CMD_EXE]) + ' /d /s /c "'
+                + subprocess.list2cmdline([exe, *args]) + '"')
     return [exe, *args]
 
 
 def _run(argv, *, input_text=None, timeout=60, cwd=None):
-    return subprocess.run(
-        argv, input=input_text, capture_output=True, text=True, encoding="utf-8",
-        errors="replace", timeout=timeout, cwd=cwd, env=child_env(),
-        creationflags=CREATE_NO_WINDOW if IS_WINDOWS else 0,
+    flags = CREATE_NO_WINDOW if IS_WINDOWS else 0
+    p = subprocess.Popen(
+        argv, stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        errors="replace", cwd=cwd, env=child_env(), creationflags=flags,
     )
+    try:
+        out, err = p.communicate(input_text, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        if IS_WINDOWS:
+            # A cmd.exe shim's node/codex children hold the pipes; end the whole tree.
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)],
+                           capture_output=True, creationflags=flags)
+        p.kill()
+        try:
+            p.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+        raise
+    return subprocess.CompletedProcess(argv, p.returncode, out, err)
 
 
-def open_console(argv: list, title: str = "SearchShip") -> subprocess.Popen:
+def open_console(argv, title: str = "SearchShip") -> subprocess.Popen:
     """Run a command where the user can see and interact with it."""
     if IS_WINDOWS:
         return subprocess.Popen(argv, env=child_env(), creationflags=CREATE_NEW_CONSOLE)
@@ -103,7 +134,7 @@ class Provider:
         env_path = child_env().get("PATH")
         for n in self.exe_names:
             hit = shutil.which(n, path=env_path)
-            if hit:
+            if hit and os.path.isabs(hit):  # ignore relative PATH entries
                 return hit
         for c in self.candidates():
             if c and Path(c).is_file():
@@ -137,7 +168,7 @@ class Provider:
 
     def install(self) -> subprocess.Popen:
         if IS_WINDOWS:
-            return open_console(["powershell.exe", "-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass",
+            return open_console([POWERSHELL_EXE, "-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass",
                                  "-Command", self.install_hint], f"Install {self.label}")
         raise AIError(f"Run this in a terminal: {self.install_hint}")
 
@@ -225,10 +256,14 @@ class Codex(Provider):
             schema_path = Path(work) / "schema.json"
             out_path = Path(work) / "answer.json"
             schema_path.write_text(json.dumps(schema), encoding="utf-8")
+            # Web search is the only tool Codex needs. Turning the shell tools
+            # off keeps a hostile web page from talking it into reading local files.
             args = ["exec", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only",
                     "--color", "never", "--output-schema", str(schema_path),
                     "--output-last-message", str(out_path),
-                    "-c", "web_search=" + ('"live"' if web else '"disabled"'), "-"]
+                    "-c", "web_search=" + ('"live"' if web else '"disabled"'),
+                    "-c", "features.shell_tool=false", "-c", "features.unified_exec=false",
+                    "-c", "features.view_image=false", "-"]
             try:
                 r = _run(_argv(exe, args), input_text=prompt, timeout=timeout, cwd=work)
             except subprocess.TimeoutExpired:

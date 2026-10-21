@@ -46,7 +46,7 @@ def test_import_keeps_existing_rows_and_adds_new_ones(store):
     incoming = {"a": row("Acme", status="new", notes=""), "b": row("Beta", status="ready"),
                 "c": {"company": "Gamma", "title": "SWE Intern"}}
     result = store.import_postings(incoming)
-    assert result == {"added": 2, "kept": 1, "total": 3}
+    assert result == {"added": 2, "replaced": 0, "kept": 1, "total": 3}
     saved = store.load_postings()
     assert saved["a"] == existing
     assert saved["b"] == incoming["b"]
@@ -176,3 +176,25 @@ def test_write_atomic_replaces_file(tmp_path):
     store_mod.write_atomic(p, "two")
     assert p.read_text(encoding="utf-8") == "two"
     assert sorted(os.listdir(tmp_path)) == ["x.json"]
+
+
+def test_import_restores_history_onto_rows_the_scan_added(tmp_path):
+    store = Store(root=tmp_path)
+    # The first scan added these before the user imported the old tracker.
+    store.save_postings({
+        "gm": {"company": "GM", "title": "ML Intern", "status": "new", "notes": "", "source": "SimplifyJobs"},
+        "mine": {"company": "Acme", "title": "SWE Intern", "status": "skipped", "notes": "",
+                 "updated": "2026-10-21T01:00:00.000Z", "source": "SimplifyJobs"},
+        "plain": {"company": "Zed", "title": "SWE Intern", "status": "new", "notes": "", "source": "SimplifyJobs"},
+    })
+    result = store.import_postings({
+        "gm": {"company": "GM", "title": "ML Intern", "status": "applied", "appliedOn": "2026-10-15",
+               "notes": "Referred by Sam", "prep": {"fit": "f", "project": "p", "why": "w"}},
+        "mine": {"company": "Acme", "title": "SWE Intern", "status": "applied", "appliedOn": "2026-10-01"},
+        "plain": {"company": "Zed", "title": "SWE Intern", "status": "new", "notes": ""},
+    })
+    rows = store.load_postings()
+    assert result == {"added": 0, "replaced": 1, "kept": 2, "total": 3}
+    assert rows["gm"]["status"] == "applied" and rows["gm"]["notes"] == "Referred by Sam"
+    assert rows["mine"]["status"] == "skipped"   # acted on in SearchShip: kept
+    assert rows["plain"]["source"] == "SimplifyJobs"  # nothing to restore: kept

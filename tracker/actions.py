@@ -35,7 +35,7 @@ def apply(postings: dict, cmd: str, pid: str, text: str = None) -> dict:
 
     approve   -> ready (worth applying to; draft prep from the card if you like)
     skip      -> skipped
-    applied   -> applied, appliedOn = today (UTC)
+    applied   -> applied, appliedOn = today (local date)
     interview -> interview
     restore   -> new (undo a skip or an automatic close)
     note      -> replaces the row's notes

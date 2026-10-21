@@ -135,7 +135,7 @@ def test_resume_skip_list_and_import(api, store):
     assert api.save_skip_companies("Acme\nBeta") == {"ok": True}
     assert api.settings_bundle()["skipCompanies"] == "Acme\nBeta\n"
     result = api.import_postings(json.dumps({"new-1": row("New Co"), "a": row("Changed")}))
-    assert result == {"added": 1, "kept": 1, "total": 3}
+    assert result == {"added": 1, "replaced": 0, "kept": 1, "total": 3}
     assert store.load_postings()["a"]["company"] == "Acme"
 
 
@@ -172,7 +172,7 @@ def test_open_data_folder(api, store, monkeypatch):
     monkeypatch.setattr(api_mod.subprocess, "Popen", lambda argv, *a, **k: launched.append(argv))
     monkeypatch.setattr(api_mod.os, "startfile", lambda p: launched.append(p), raising=False)
     assert api.open_data_folder() == {"ok": True}
-    assert launched and str(store.root) in json.dumps(launched)
+    assert any(str(store.root) in str(x) for x in launched)
 
 
 # --- devserver ------------------------------------------------------------------------------

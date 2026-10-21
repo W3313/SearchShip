@@ -120,6 +120,45 @@ def url_key(url: str) -> str:
     return f"{host}{path}?{query}" if query else f"{host}{path}"
 
 
+UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+NOISE_PARAMS = {"embed", "ref", "source", "src", "gh_src", "lever-source", "lever-origin"}
+
+
+def job_key(url: str) -> str:
+    """Identity of the job behind a URL, used to spot one posting arriving
+    from two sources. The same job reached through the company site, an
+    embed or the ATS itself gives the same key:
+
+      greenhouse.io/.../jobs/123, ...?gh_jid=123, embed/job_app?token=123 -> greenhouse:123
+      jobs.ashbyhq.com/<org>/<uuid>[/application], jobs.lever.co/<org>/<uuid> -> uuid:<uuid>
+      <tenant>.wd5.myworkdayjobs.com/.../Title_JR-123 -> workday:<tenant>:jr-123
+    Anything else falls back to url_key without tracking parameters.
+    """
+    parts = urlsplit((url or "").strip().lower())
+    host = parts.netloc[4:] if parts.netloc.startswith("www.") else parts.netloc
+    query = dict(parse_qsl(parts.query))
+    gh = query.get("gh_jid") or (query.get("token") if "greenhouse" in host else None)
+    if not (gh and gh.isdigit()) and "greenhouse" in host:
+        m = re.search(r"/jobs/(\d+)", parts.path)
+        gh = m.group(1) if m else None
+    if gh and gh.isdigit():
+        return f"greenhouse:{gh}"
+    if host.endswith(("ashbyhq.com", "lever.co")):
+        m = UUID.search(parts.path)
+        if m:
+            return f"uuid:{m.group(0)}"
+    path = parts.path.rstrip("/")
+    if host.endswith("myworkdayjobs.com"):
+        m = re.search(r"_([a-z]{0,3}-?\d{4,}[a-z0-9-]*)$", path)
+        if m:
+            return f"workday:{host.split('.')[0]}:{m.group(1)}"
+        path = re.sub(r"^/[a-z]{2}-[a-z]{2}(?=/)", "", path)
+    path = re.sub(r"/(apply|application)$", "", path)
+    q = urlencode(sorted((k, v) for k, v in parse_qsl(parts.query)
+                         if not k.startswith("utm_") and k not in NOISE_PARAMS))
+    return f"{host}{path}?{q}" if q else f"{host}{path}"
+
+
 # --- community lists -----------------------------------------------------------
 
 def fetch_simplify(get=http_get_json) -> list:

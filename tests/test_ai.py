@@ -245,6 +245,7 @@ def test_codex_run_json_command_and_parsing(fake_cli, monkeypatch):
     assert argv[argv.index("--sandbox") + 1] == "read-only"
     assert "--dangerously-bypass-approvals-and-sandbox" not in argv and "--full-auto" not in argv
     assert any(a.startswith("web_search=") and "live" in a for a in argv)
+    assert "features.shell_tool=false" in argv and "features.unified_exec=false" in argv
     assert not Path(call["cwd"]).exists(), "Codex runs in a throwaway temp folder"
 
 
@@ -306,3 +307,12 @@ def test_get_unknown_provider_raises():
 def test_login_commands_use_the_official_clis():
     assert ai.Claude.login_args[:2] == ["auth", "login"]
     assert ai.Codex.login_args == ["login"]
+
+
+def test_npm_shim_command_survives_a_space_in_the_path(monkeypatch):
+    monkeypatch.setattr(ai, "IS_WINDOWS", True)
+    monkeypatch.setattr(ai, "CMD_EXE", r"C:\Windows\System32\cmd.exe")
+    line = ai._argv(r"C:\Users\Jane Doe\AppData\Roaming\npm\codex.cmd", ["exec", "-c", 'web_search="live"', "-"])
+    assert line == (r'C:\Windows\System32\cmd.exe /d /s /c "'
+                    r'"C:\Users\Jane Doe\AppData\Roaming\npm\codex.cmd" exec -c web_search=\"live\" -"')
+    assert ai._argv(r"C:\Tools\claude.exe", ["-p"]) == [r"C:\Tools\claude.exe", "-p"]

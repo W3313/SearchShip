@@ -83,7 +83,8 @@ without approval, so for anyone else the safe route is an API key, in Claude Cod
   is converted to the SimplifyJobs listing format so the same filters apply: Summer 2027 software,
   AI/ML/data and quant roles in the Bay Area, the Sacramento area or remote, that undergraduates
   can take, posted in the last 14 days, at most 25 new rows per scan. A job that arrives from a
-  second source (same URL, or same company and title) is not added twice.
+  second source is not added twice: it is matched by its Greenhouse, Lever, Ashby or Workday job
+  id (or its URL), or by the same company and title.
 - **Auto-scan.** While SearchShip is open it scans when the last scan is 20 or more hours old,
   checking at launch and every 30 minutes. There is no background service: if the app is closed,
   nothing runs.
@@ -98,8 +99,10 @@ without approval, so for anyone else the safe route is an API key, in Claude Cod
 - **Checks before saving.** The AI runs headless in an empty temporary folder (`claude -p` with
   only web search and web fetch, or `codex exec` in its read-only sandbox with web search) and
   must answer with JSON. SearchShip validates every entry before saving it: only the ids it asked
-  about, all three prep fields present, no em or en dashes in the prep, and a reason for every skip. Entries that fail are dropped and
-  listed as problems, and a row you changed while the AI was working is left alone.
+  about, all three prep fields present, no em or en dashes in the prep, and a reason for every
+  skip. Entries that fail are dropped and listed as problems, and a row you changed while the AI
+  was working is left alone. On a row you already acted on, an AI "skip" only adds its reason to
+  your notes.
 - **Nothing is ever submitted to employers.**
 
 ## Your data

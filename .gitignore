@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.spec.bak
+.venv/
+venv/
+# local clones / data used while developing
+s27/
+.searchship/

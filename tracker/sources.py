@@ -8,6 +8,7 @@ import gzip
 import hashlib
 import json
 import re
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from urllib.parse import quote, urlsplit, parse_qsl, urlencode
@@ -44,12 +45,16 @@ def http_get_json(url: str, timeout: int = 60):
             body = resp.read()
             if resp.headers.get("Content-Encoding") == "gzip":
                 body = gzip.decompress(body)
-    except Exception as e:  # urllib raises several unrelated types
-        raise SourceError(f"{url}: {e}") from e
+    except urllib.error.HTTPError as e:
+        raise SourceError("not found (check the board name)" if e.code == 404 else f"HTTP {e.code}") from e
+    except urllib.error.URLError as e:
+        raise SourceError(f"could not connect ({e.reason})") from e
+    except Exception as e:  # timeouts, bad gzip, dropped connections
+        raise SourceError(str(e) or e.__class__.__name__) from e
     try:
         return json.loads(body.decode("utf-8"))
     except ValueError as e:
-        raise SourceError(f"{url}: response was not JSON") from e
+        raise SourceError("the response was not JSON") from e
 
 
 def infer_category(title: str) -> str:
@@ -182,9 +187,9 @@ def fetch_board(spec: str, get=http_get_json) -> list:
         data = get(f"https://api.lever.co/v0/postings/{quote(token)}?mode=json")
         for j in data if isinstance(data, list) else []:
             title = j.get("text") or ""
-            if not INTERN.search(title):
-                continue
             cats = j.get("categories") or {}
+            if not (INTERN.search(title) or INTERN.search(str(cats.get("commitment") or ""))):
+                continue
             locs = list(cats.get("allLocations") or []) or [cats.get("location") or ""]
             if str(j.get("workplaceType") or "").lower() == "remote" and "Remote" not in locs:
                 locs.append("Remote")
@@ -194,7 +199,8 @@ def fetch_board(spec: str, get=http_get_json) -> list:
         data = get(f"https://api.ashbyhq.com/posting-api/job-board/{quote(token)}")
         for j in data.get("jobs", []):
             title = j.get("title") or ""
-            if not INTERN.search(title) or j.get("isListed") is False:
+            is_intern = INTERN.search(title) or str(j.get("employmentType") or "").lower() == "intern"
+            if not is_intern or j.get("isListed") is False:
                 continue
             locs = [j.get("location") or ""] + [s.get("location") or "" for s in j.get("secondaryLocations") or []]
             if j.get("isRemote") and "Remote" not in locs:

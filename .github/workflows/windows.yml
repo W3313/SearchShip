@@ -1,0 +1,163 @@
+name: Windows build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  test:
+    name: Tests (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # requirements-dev.txt pulls in pywebview, which needs GTK or Qt on
+      # Linux. The tests never open a window, so pytest is all they need.
+      - name: Install pytest
+        run: python -m pip install pytest
+      - name: Run tests
+        env:
+          SEARCHSHIP_HOME: ${{ runner.temp }}/searchship-home
+          SEARCHSHIP_FAKE_AI: "1"
+        run: python -m pytest -q
+
+  windows:
+    name: Build SearchShip.exe
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      SEARCHSHIP_FAKE_AI: "1"   # CI never calls a real Claude Code or Codex CLI
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Use a throwaway data folder
+        run: |
+          $dataDir = Join-Path $env:RUNNER_TEMP 'searchship-home'
+          New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+          "SEARCHSHIP_HOME=$dataDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build SearchShip.exe
+        id: build
+        run: ./packaging/build.ps1 -SkipInstall
+
+      # The exe is windowed (no console). run-exe.ps1 waits with a timeout and
+      # prints the --out file and searchship.log, then exits with the exe's code.
+      - name: Self-test the built exe
+        timeout-minutes: 5
+        run: ./packaging/run-exe.ps1 -Arguments 'selftest' -OutFile "$env:RUNNER_TEMP\selftest.txt" -TimeoutSec 180
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SearchShip-windows
+          path: dist/SearchShip.exe
+          if-no-files-found: error
+
+      # Lists the exe's archive: our data files, pywebview's bridge scripts,
+      # pythonnet and the WebView2 DLLs. Runs after the upload so a wrong
+      # expectation here still leaves an exe to try, but it fails the job
+      # (and so blocks a release).
+      - name: Check the bundle contents
+        run: python packaging/check_bundle.py dist/SearchShip.exe
+
+      # The checks below report problems without failing the build. They also
+      # run when an earlier check failed, for more clues.
+
+      - name: Make sure the WebView2 runtime is present
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          $id = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $keys = @(
+            "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\$id",
+            "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$id",
+            "HKCU:\Software\Microsoft\EdgeUpdate\Clients\$id"
+          )
+          $pv = $keys | ForEach-Object { (Get-ItemProperty -Path $_ -ErrorAction SilentlyContinue).pv } |
+            Where-Object { $_ } | Select-Object -First 1
+          if ($pv) { Write-Host "WebView2 Runtime $pv is installed"; exit 0 }
+          Write-Host 'WebView2 Runtime not found; installing the Evergreen bootstrapper'
+          $setup = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $setup
+          $p = Start-Process -FilePath $setup -ArgumentList '/silent', '/install' -Wait -PassThru
+          Write-Host "installer exit code: $($p.ExitCode)"
+
+      - name: GUI smoke test (window, page load, JS bridge)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 6
+        run: |
+          ./packaging/run-exe.ps1 -Arguments 'selftest','--gui' -OutFile "$env:RUNNER_TEMP\selftest-gui.txt" -TimeoutSec 300
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host '::warning title=GUI smoke test::The window or its JS bridge did not pass on this runner. See the step log.'
+            exit 1
+          }
+
+      - name: Dry-run scan with the built exe (live sources)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        run: ./packaging/run-exe.ps1 -Arguments 'scan','--dry-run','--no-ai' -TimeoutSec 540
+
+      - name: Check the default career boards
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python -m tracker check-boards
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: SearchShip-windows
+          path: dist
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cd dist
+          sha256sum SearchShip.exe > SearchShip.exe.sha256
+          cat SearchShip.exe.sha256
+          notes="Windows 10 and 11. Download SearchShip.exe and run it. The exe is not code-signed, so Windows SmartScreen may say it is an unrecognized app: choose More info, then Run anyway."
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" SearchShip.exe SearchShip.exe.sha256 --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" SearchShip.exe SearchShip.exe.sha256 --repo "$GITHUB_REPOSITORY" \
+              --title "SearchShip $TAG" --notes "$notes" --generate-notes --verify-tag
+          fi

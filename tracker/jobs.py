@@ -36,8 +36,10 @@ def connected_provider(settings):
 def run_daily(store, log=print, dry_run=False, get=sources.http_get_json, provider="auto") -> dict:
     """Scan every source, then draft prep for this run's best new rows."""
     settings = store.load_settings()
-    if provider == "auto":
-        provider = None if dry_run else connected_provider(settings)
+    if dry_run:
+        provider = None
+    elif provider == "auto":
+        provider = connected_provider(settings)
     errors, web = [], []
 
     if (provider and settings["sources"].get("websearch")
@@ -127,7 +129,10 @@ class JobRunner:
             if not ids_ok:
                 raise ValueError("Only New or Ready postings can be drafted.")
             counts = drafting.draft_rows(self.store, provider, ids_ok, log)
-            log(f"Drafted {counts['ready']}, skipped {counts['skipped']}")
+            msg = f"Drafted {counts['ready']}, skipped {counts['skipped']}"
+            if counts.get("advised"):
+                msg += f", {counts['advised']} kept as you left them (the AI's reason is in notes)"
+            log(msg)
             return counts
         return self.start("draft", work)
 

@@ -1,0 +1,1798 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>SearchShip</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fafaf8;
+  --surface: #ffffff;
+  --text: #1c1c1a;
+  --muted: #64645d;
+  --line: #e6e5e0;
+  --line-strong: #cfcec8;
+  --hover: rgba(28, 28, 20, .05);
+  --press: rgba(28, 28, 20, .09);
+  --accent: #2f56c4;
+  --accent-hover: #284aab;
+  --accent-text: #2a4eb5;
+  --accent-soft: rgba(47, 86, 196, .09);
+  --on-accent: #ffffff;
+  --ok: #2b6e47;
+  --ok-soft: rgba(43, 110, 71, .1);
+  --danger: #b0261c;
+  --danger-soft: rgba(176, 38, 28, .07);
+  --focus: #2f56c4;
+  --radius: 6px;
+  --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151515;
+    --surface: #1c1c1b;
+    --text: #ebebe6;
+    --muted: #a3a39b;
+    --line: #2b2b29;
+    --line-strong: #43433f;
+    --hover: rgba(255, 255, 255, .06);
+    --press: rgba(255, 255, 255, .1);
+    --accent: #8fa8f2;
+    --accent-hover: #a5b9f5;
+    --accent-text: #a1b6f6;
+    --accent-soft: rgba(143, 168, 242, .13);
+    --on-accent: #10172b;
+    --ok: #7fc59c;
+    --ok-soft: rgba(127, 197, 156, .12);
+    --danger: #f2a097;
+    --danger-soft: rgba(242, 160, 151, .1);
+    --focus: #a1b6f6;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+[hidden] { display: none !important; }
+button, input, textarea, select { font: inherit; color: inherit; }
+h1, h2, h3, p, ul { margin: 0; }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+[tabindex="-1"]:focus-visible { outline: none; }
+::selection { background: var(--accent-soft); }
+
+/* ---------- controls ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 32px; padding: 5px 12px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: transparent; color: var(--text);
+  font-size: 13px; font-weight: 500; line-height: 1.3;
+  cursor: pointer; white-space: nowrap; text-decoration: none;
+  transition: background-color .12s;
+}
+.btn:hover:not(:disabled) { background: var(--hover); }
+.btn:active:not(:disabled) { background: var(--press); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn svg { flex: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.quiet { border-color: transparent; color: var(--muted); padding-left: 8px; padding-right: 8px; gap: 4px; }
+.btn.edge { margin-left: -8px; }
+.btn.primary:disabled { background: var(--hover); border-color: transparent; color: var(--muted); opacity: 1; }
+.btn.quiet:hover:not(:disabled) { color: var(--text); }
+.btn.go { color: var(--accent-text); }
+.btn.lg { min-height: 40px; padding: 8px 18px; font-size: 14px; }
+.btn.icon { width: 32px; padding: 0; }
+.btn.copy { min-width: 72px; }
+
+.field {
+  display: block; width: 100%;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: var(--surface); color: var(--text);
+  padding: 8px 10px; font-size: 13px; line-height: 1.55;
+}
+.field:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; }
+.field::placeholder { color: var(--muted); opacity: .85; }
+textarea.field { resize: vertical; min-height: 96px; }
+textarea.mono { font-family: var(--mono); font-size: 12.5px; }
+
+.check { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; min-height: 32px; cursor: pointer; }
+.check input { width: 16px; height: 16px; margin: 3px 0 0; flex: none; accent-color: var(--accent); cursor: pointer; }
+.check small { display: block; color: var(--muted); font-size: 12.5px; }
+
+.hint { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+.err { color: var(--danger); font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
+.ok-text { color: var(--ok); }
+
+/* ---------- layout ---------- */
+.wrap { max-width: 880px; margin: 0 auto; padding: 0 24px 64px; }
+.wrap.narrow { max-width: 580px; }
+@media (max-width: 600px) { .wrap { padding: 0 16px 48px; } }
+.boot { padding: 40vh 16px 0; text-align: center; color: var(--muted); }
+
+/* ---------- onboarding ---------- */
+.onb { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding-top: 48px; padding-bottom: 48px; }
+.hero-title { font-size: 34px; font-weight: 650; letter-spacing: -.02em; line-height: 1.15; }
+.eyebrow { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+.h1 { font-size: 24px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; }
+.lede { color: var(--muted); font-size: 15px; margin-top: 10px; max-width: 54ch; }
+.points { list-style: none; padding: 0; margin: 32px 0 36px; border-top: 1px solid var(--line); }
+.points li { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.points li::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: 8px; border-radius: 50%; background: var(--accent); }
+.fine { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 28px; flex-wrap: wrap-reverse; }
+.foot .right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.block { margin-top: 28px; }
+.block h2 { font-size: 15px; font-weight: 600; }
+.block .desc { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 10px; }
+
+/* ---------- AI provider picker ---------- */
+.providers { margin-top: 24px; border-top: 1px solid var(--line); }
+.prov { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 0 10px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.prov input[type="radio"] {
+  appearance: none; -webkit-appearance: none; display: grid; place-content: center;
+  width: 16px; height: 16px; margin: 3px 0 0; border: 1.5px solid var(--line-strong); border-radius: 50%;
+  background: var(--surface); cursor: pointer;
+}
+.prov input[type="radio"]::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  transform: scale(0); transition: transform .12s;
+}
+.prov input[type="radio"]:hover:not(:disabled) { border-color: var(--muted); }
+.prov input[type="radio"]:checked { border-color: var(--accent); }
+.prov input[type="radio"]:checked::before { transform: scale(1); }
+.prov input[type="radio"]:disabled { cursor: default; opacity: .5; }
+.prov label { display: block; cursor: pointer; }
+.prov.off label { cursor: default; }
+.prov-name { display: block; font-weight: 600; }
+.prov-plan { display: block; color: var(--muted); font-size: 13px; }
+.prov-state { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; }
+.prov-state.ok { color: var(--ok); }
+.prov-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.codeline {
+  display: flex; align-items: stretch; margin-top: 10px; max-width: 100%;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+}
+.codeline code {
+  flex: 1; min-width: 0; padding: 6px 10px; overflow-x: auto; white-space: nowrap;
+  font-family: var(--mono); font-size: 12px; line-height: 20px; align-self: center;
+}
+.codeline .btn { border: 0; border-left: 1px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0; }
+.waiting { display: inline-flex; align-items: center; gap: 8px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+
+/* ---------- tracker ---------- */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 0 2px; }
+.brand { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+.top-actions { display: flex; align-items: center; gap: 6px; }
+.meta { color: var(--muted); font-size: 13px; min-height: 20px; }
+.problems { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.problems summary, .notice summary {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 32px;
+  list-style: none; cursor: pointer; border-radius: var(--radius);
+}
+.problems summary::-webkit-details-marker, .notice summary::-webkit-details-marker { display: none; }
+.problems summary svg, .notice summary svg { transition: transform .15s; }
+.problems[open] summary svg, .notice details[open] summary svg { transform: rotate(180deg); }
+.problems summary:hover, .notice summary:hover { color: var(--text); }
+.problems ul, .notice ul { padding-left: 18px; margin: 2px 0 4px; }
+.problems li, .notice li { overflow-wrap: anywhere; }
+
+.progress { margin-top: 12px; }
+.bar { position: relative; height: 2px; overflow: hidden; border-radius: 2px; background: var(--line); }
+.bar::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -30%; width: 30%;
+  background: var(--accent); animation: slide 1.4s ease-in-out infinite;
+}
+@keyframes slide { to { left: 100%; } }
+.progress-text { margin-top: 6px; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .bar::after { animation: none; left: 0; width: 100%; opacity: .45; }
+  .dot { animation: none; }
+}
+
+.notice {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: 12px;
+  padding: 4px 4px 4px 12px; border-radius: var(--radius);
+  background: var(--accent-soft); font-size: 13px;
+}
+.notice.bad { background: var(--danger-soft); }
+.notice.bad .notice-text { color: var(--danger); }
+.notice-body { flex: 1; min-width: 0; padding: 6px 0; overflow-wrap: anywhere; }
+.notice summary { color: var(--muted); }
+
+.hintbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+
+.toolbar {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px;
+  margin-top: 18px; border-bottom: 1px solid var(--line);
+}
+.tabs { display: flex; gap: 2px; flex: 1 1 auto; min-width: 0; margin-bottom: -1px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs.fade-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+.tabs.fade-l { -webkit-mask-image: linear-gradient(to right, transparent, #000 36px); mask-image: linear-gradient(to right, transparent, #000 36px); }
+.tabs.fade-l.fade-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+.tab {
+  flex: none; min-height: 40px; padding: 0 10px;
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none;
+  color: var(--muted); font-size: 13.5px; font-weight: 500; white-space: nowrap; cursor: pointer;
+}
+.tab:first-child { padding-left: 2px; }
+.tab:hover { color: var(--text); }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.tab:focus-visible { outline-offset: -3px; border-radius: 4px; }
+.tab .n { margin-left: 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.search { position: relative; flex: 0 1 240px; margin-bottom: 6px; }
+.search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.search input { min-height: 32px; padding: 5px 10px 5px 31px; }
+.search input::-webkit-search-cancel-button { cursor: pointer; }
+@media (max-width: 640px) {
+  .search { order: -1; flex-basis: 100%; margin-bottom: 0; }
+}
+
+.list { list-style: none; padding: 0; }
+.card { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.card-head { display: flex; align-items: flex-start; gap: 10px; border-radius: 4px; }
+.card.expandable .card-head { cursor: pointer; }
+.card-head:focus-visible { outline-offset: 4px; }
+.card-main { flex: 1; min-width: 0; }
+.line1 { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.company { font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
+.title { overflow-wrap: anywhere; }
+.facts { margin-top: 2px; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.chip {
+  flex: none; display: inline-block; padding: 0 8px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600; line-height: 20px;
+  background: var(--hover); color: var(--muted);
+}
+.chip.st-new { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--text); }
+.chip.st-ready { background: var(--accent-soft); color: var(--accent-text); }
+.chip.st-applied, .chip.st-interview { background: var(--ok-soft); color: var(--ok); }
+.chev { flex: none; display: inline-flex; margin-top: 2px; color: var(--muted); transition: transform .15s; }
+.card.open .chev { transform: rotate(180deg); }
+.note {
+  margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--line-strong);
+  font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.note-label { color: var(--muted); font-weight: 600; margin-right: 6px; }
+.prep { margin-top: 12px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.prep-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; padding: 12px 0; }
+.prep-item + .prep-item { border-top: 1px solid var(--line); }
+.prep-label { grid-column: 1; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.prep-text { grid-column: 1; margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 76ch; }
+.prep-item .btn.copy { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
+.note-edit { margin-top: 10px; }
+.note-edit .row { margin-top: 8px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.actions .push { margin-left: auto; }
+.actions .btn.quiet:last-child { margin-right: -8px; }
+.empty { padding: 56px 0; text-align: center; color: var(--muted); }
+.more { display: flex; justify-content: center; padding: 18px 0 0; }
+
+/* ---------- settings ---------- */
+.set-head {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  padding: 14px 0 12px; background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.set-head h1 { flex: 1; font-size: 17px; font-weight: 650; }
+.set-status { font-size: 13px; color: var(--muted); }
+.row.spread { justify-content: space-between; }
+.row.spread .hint { margin: 0; }
+.row.spread .btn.quiet:last-child { margin-right: -8px; }
+.set-status.bad { order: 5; flex-basis: 100%; color: var(--danger); overflow-wrap: anywhere; }
+.leave { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; padding: 8px 8px 8px 12px; border-radius: var(--radius); background: var(--accent-soft); font-size: 13px; }
+.leave span { flex: 1 1 200px; }
+.sec { scroll-margin-top: 72px; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 8px 32px; padding: 24px 0; border-bottom: 1px solid var(--line); }
+.sec h2 { font-size: 14px; font-weight: 600; }
+.sec .desc { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+.sec .providers { margin-top: 0; border-top: 0; }
+.sec .providers .prov:first-child { padding-top: 0; }
+@media (max-width: 760px) { .sec { grid-template-columns: minmax(0, 1fr); } }
+.path { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.set-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 20px; }
+</style>
+<!--SEARCHSHIP_BRIDGE-->
+<script>
+'use strict';
+(() => {
+
+// =====================================================================
+// Bridge to the Python Api: pywebview in the desktop app, HTTP in
+// `python -m tracker serve`. call() never throws; failures come back as
+// {error: "..."} just like the Api's own errors.
+// =====================================================================
+let bridgePromise = null;
+
+function bridge() {
+  if (bridgePromise) return bridgePromise;
+  bridgePromise = new Promise((resolve, reject) => {
+    if (window.SEARCHSHIP_HTTP_API) return resolve('http');
+    const ready = () => !!(window.pywebview && window.pywebview.api &&
+                           typeof window.pywebview.api.bootstrap === 'function');
+    if (ready()) return resolve('webview');
+    const check = () => { if (ready()) { stop(); resolve('webview'); } };
+    const timer = setInterval(check, 150);
+    const limit = setTimeout(() => { stop(); reject(new Error('timeout')); }, 20000);
+    function stop() {
+      clearInterval(timer); clearTimeout(limit);
+      window.removeEventListener('pywebviewready', check);
+    }
+    window.addEventListener('pywebviewready', check);
+  });
+  return bridgePromise;
+}
+
+async function call(name, ...args) {
+  let mode;
+  try {
+    mode = await bridge();
+  } catch (e) {
+    return { error: 'SearchShip could not reach its background service. Close it and open it again.' };
+  }
+  try {
+    let result;
+    if (mode === 'http') {
+      let res;
+      try {
+        res = await fetch('/api/' + name, {
+          method: 'POST',
+          headers: { 'X-SearchShip': '1', 'Content-Type': 'application/json' },
+          body: JSON.stringify(args),
+        });
+      } catch (e) {
+        return { error: 'Could not reach SearchShip. Is it still running?' };
+      }
+      let data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (!res.ok) return { error: (data && data.error) || ('Request failed (' + res.status + ')') };
+      result = data;
+    } else {
+      const fn = window.pywebview.api[name];
+      if (typeof fn !== 'function') return { error: 'This version of SearchShip has no "' + name + '" action.' };
+      result = await fn(...args);
+    }
+    if (result === null || result === undefined) return {};
+    if (typeof result !== 'object') return { value: result };
+    return result;
+  } catch (e) {
+    return { error: (e && e.message) ? String(e.message) : String(e || 'Unknown error') };
+  }
+}
+
+// =====================================================================
+// DOM helpers. Text always goes in through text nodes, never innerHTML.
+// =====================================================================
+const PROPS = new Set(['value', 'checked', 'disabled', 'hidden', 'spellcheck', 'readOnly']);
+
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  if (props) {
+    for (const k of Object.keys(props)) {
+      const v = props[k];
+      if (v === undefined || v === null) continue;
+      if (k === 'class') el.className = v;
+      else if (typeof v === 'function' && k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else if (PROPS.has(k)) el[k] = v;
+      else if (v === false) continue;
+      else el.setAttribute(k, v === true ? '' : String(v));
+    }
+  }
+  add(el, kids);
+  return el;
+}
+
+function add(el, kids) {
+  for (const k of [kids].flat(Infinity)) {
+    if (k === null || k === undefined || k === false || k === '') continue;
+    el.append(k instanceof Node ? k : String(k));
+  }
+  return el;
+}
+
+function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const ICONS = {
+  external: ['M15 3h6v6', 'M10 14 21 3', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'],
+  chevron: ['m6 9 6 6 6-6'],
+  back: ['m15 18-6-6 6-6'],
+  check: ['M20 6 9 17l-5-5'],
+  search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'm21 21-4.3-4.3'],
+  settings: ['M4 7h9', 'M19 7h1', 'M16 9.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+             'M4 17h1', 'M11 17h9', 'M8 19.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z'],
+  scan: ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
+  folder: ['M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'],
+  close: ['M18 6 6 18', 'm6 6 12 12'],
+};
+
+function icon(name, size) {
+  size = size || 16;
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  for (const [k, v] of [['viewBox', '0 0 24 24'], ['width', size], ['height', size], ['fill', 'none'],
+                        ['stroke', 'currentColor'], ['stroke-width', '1.8'], ['stroke-linecap', 'round'],
+                        ['stroke-linejoin', 'round'], ['aria-hidden', 'true'], ['focusable', 'false']]) {
+    svg.setAttribute(k, String(v));
+  }
+  for (const d of ICONS[name] || []) {
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', d);
+    svg.append(p);
+  }
+  return svg;
+}
+
+// Re-render something without losing keyboard focus: elements that should
+// keep focus carry data-fk, and the replacement gets the same key.
+function keepFocus(fn) {
+  const a = document.activeElement;
+  const key = a && a.getAttribute ? a.getAttribute('data-fk') : null;
+  let sel = null;
+  if (key && typeof a.selectionStart === 'number') {
+    try { sel = [a.selectionStart, a.selectionEnd]; } catch (e) { sel = null; }
+  }
+  fn();
+  if (!key || (document.activeElement && document.activeElement !== document.body &&
+               document.activeElement.isConnected && document.activeElement === a)) return;
+  const b = document.querySelector('[data-fk="' + CSS.escape(key) + '"]');
+  if (b && !b.disabled) {
+    b.focus({ preventScroll: true });
+    if (sel && typeof b.setSelectionRange === 'function') {
+      try { b.setSelectionRange(sel[0], sel[1]); } catch (e) { /* not a text field */ }
+    }
+  }
+}
+
+// ---------- small formatting helpers ----------
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+
+function fmtDay(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
+  if (!m) return '';
+  const y = +m[1], mo = +m[2], d = +m[3];
+  if (mo < 1 || mo > 12) return '';
+  return MONTHS[mo - 1] + ' ' + d + (y !== new Date().getFullYear() ? ', ' + y : '');
+}
+
+function stamp(value) {
+  const t = Date.parse(String(value || ''));
+  return isNaN(t) ? 0 : t;
+}
+
+function relTime(value) {
+  const t = stamp(value);
+  if (!t) return '';
+  const sec = (Date.now() - t) / 1000;
+  if (sec < 45) return 'just now';
+  const min = Math.round(sec / 60);
+  if (min < 60) return plural(min, 'minute') + ' ago';
+  const hrs = Math.round(min / 60);
+  if (hrs < 24) return plural(hrs, 'hour') + ' ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 2) return 'yesterday';
+  if (days < 7) return days + ' days ago';
+  const d = new Date(t);
+  return 'on ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + (d.getFullYear() !== new Date().getFullYear() ? ', ' + d.getFullYear() : '');
+}
+
+function scoreOf(r) {
+  const n = typeof r.score === 'number' ? r.score : parseFloat(r.score);
+  return isFinite(n) ? n : null;
+}
+
+function str(v) { return v === null || v === undefined ? '' : String(v); }
+
+// ---------- clipboard ----------
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) { /* fall back below */ }
+  const prev = document.activeElement;
+  const ta = h('textarea', { readonly: true, 'aria-hidden': 'true',
+                             style: 'position:fixed;top:0;left:-9999px;opacity:0' });
+  ta.value = text;
+  document.body.append(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  if (prev && prev.focus) prev.focus({ preventScroll: true });
+  return ok;
+}
+
+function copyButton(getText, fk, label) {
+  label = label || 'Copy';
+  const b = h('button', { type: 'button', class: 'btn copy', 'data-fk': fk || null }, label);
+  b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const ok = await copyText(getText());
+    b.textContent = ok ? 'Copied' : 'Copy failed';
+    clearTimeout(b._t);
+    b._t = setTimeout(() => { b.textContent = label; }, 1600);
+  });
+  return b;
+}
+
+async function readTextFile(file, maxBytes) {
+  if (!file) return { error: 'No file was chosen.' };
+  if (file.size > maxBytes) return { error: 'That file is too large.' };
+  let text;
+  try { text = await file.text(); } catch (e) { return { error: 'Could not read that file.' }; }
+  if (text.indexOf('\u0000') !== -1) return { error: 'That file does not look like plain text.' };
+  return { text: text.replace(/^﻿/, '') };
+}
+
+function filePicker(accept, onText, maxBytes) {
+  const input = h('input', { type: 'file', accept: accept, hidden: true, tabindex: '-1' });
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (file) onText(await readTextFile(file, maxBytes), file);
+  });
+  return input;
+}
+
+// =====================================================================
+// App state
+// =====================================================================
+const S = {
+  boot: null,
+  settings: {},
+  state: {},
+  postings: {},
+  loaded: false,
+  hasResume: false,
+  ai: null,                 // {ready, label} once known
+  tab: 'ready',
+  tabChosen: false,
+  query: '',
+  limit: 100,
+  expanded: new Set(),
+  editing: new Map(),       // id -> note draft text
+  cards: new Map(),
+  screen: '',
+  token: 0,
+  ui: {},
+  job: { running: false },
+  jobSeq: null,
+  jobTimer: 0,
+  pendingNotice: null,
+  noticeTimer: 0,
+};
+const PAGE = 100;
+let app;
+
+const STATUS_LABEL = { new: 'New', ready: 'Ready', applied: 'Applied', interview: 'Interview',
+                       skipped: 'Skipped', closed: 'Closed' };
+
+function byDesc(a, b) { return b - a; }
+function scoreDesc(a, b) { return (scoreOf(b.r) ?? -1e9) - (scoreOf(a.r) ?? -1e9); }
+
+const TABS = [
+  { key: 'ready', label: 'Ready', match: (s) => s === 'ready',
+    sort: (a, b) => scoreDesc(a, b) || byDesc(stamp(a.r.added), stamp(b.r.added)),
+    empty: 'Nothing ready yet. Approve a posting in New, or let the next scan draft some.' },
+  { key: 'new', label: 'New', match: (s) => s === 'new',
+    sort: (a, b) => byDesc(stamp(a.r.added), stamp(b.r.added)) || scoreDesc(a, b),
+    empty: 'Nothing new. Scan to check for postings.' },
+  { key: 'applied', label: 'Applied/Interview', match: (s) => s === 'applied' || s === 'interview',
+    sort: (a, b) => byDesc(stamp(a.r.appliedOn || a.r.updated), stamp(b.r.appliedOn || b.r.updated)) ||
+                    byDesc(stamp(a.r.updated), stamp(b.r.updated)),
+    empty: 'No applications yet. Mark a posting Applied once you send it.' },
+  { key: 'skipped', label: 'Skipped/Closed', match: (s) => s === 'skipped' || s === 'closed',
+    sort: (a, b) => byDesc(stamp(a.r.updated || a.r.added), stamp(b.r.updated || b.r.added)),
+    empty: 'Nothing skipped or closed.' },
+  { key: 'all', label: 'All', match: () => true,
+    sort: (a, b) => byDesc(stamp(a.r.added), stamp(b.r.added)) || scoreDesc(a, b),
+    empty: 'No postings yet. Scan to find some.' },
+];
+const tabByKey = (k) => TABS.find((t) => t.key === k);
+
+const SCREENS = {};
+
+function go(screen, opts) {
+  S.token += 1;
+  S.screen = screen;
+  S.ui = {};
+  S.cards = new Map();
+  clear(app);
+  window.scrollTo(0, 0);
+  SCREENS[screen](opts || {});
+  const focusTarget = app.querySelector('[data-autofocus]');
+  if (focusTarget) focusTarget.focus({ preventScroll: true });
+}
+
+function fatal(message) {
+  S.token += 1;
+  S.screen = 'fatal';
+  clear(app);
+  app.append(h('main', { class: 'wrap narrow onb' },
+    h('h1', { class: 'h1' }, 'SearchShip could not start'),
+    h('p', { class: 'err', role: 'alert' }, message),
+    h('div', { class: 'foot' },
+      h('button', { type: 'button', class: 'btn primary', onclick: () => location.reload() }, 'Try again'))));
+}
+
+// =====================================================================
+// 1. Landing
+// =====================================================================
+SCREENS.landing = () => {
+  app.append(h('main', { class: 'wrap narrow onb' },
+    h('h1', { class: 'hero-title' }, 'SearchShip'),
+    h('p', { class: 'lede' },
+      'Finds Summer 2027 internships and drafts your application prep with your own Claude or ChatGPT plan.'),
+    h('ul', { class: 'points' },
+      h('li', null, 'Checks SimplifyJobs, community lists and company career pages every day.'),
+      h('li', null, 'Ranks each posting so the strongest matches come first.'),
+      h('li', null, 'Drafts fit, project and “why this company” answers from your resume, for you to review.')),
+    h('div', null,
+      h('button', { type: 'button', class: 'btn primary lg', onclick: () => go('signin') }, 'Get started')),
+    h('p', { class: 'fine' }, 'Your tracker stays on this computer.')));
+};
+
+// =====================================================================
+// AI provider picker (sign-in step and Settings)
+// =====================================================================
+function providerPicker(opts) {
+  const token = S.token;
+  const onChange = opts.onChange || (() => {});
+  const order = ['claude', 'codex'];
+  const statuses = {};
+  const rows = {};
+  const errs = {};
+  const polls = {};          // name -> timeout id while waiting for install/sign-in
+  const sigs = {};
+  let busy = false;
+  const alive = () => token === S.token;
+
+  const el = h('div', { class: 'providers', role: 'radiogroup', 'aria-label': 'AI account' });
+  const loading = h('p', { class: 'hint waiting', style: 'padding:16px 0;margin:0' },
+                    h('span', { class: 'dot' }), 'Checking which AI apps are installed…');
+  el.append(loading);
+
+  const chosen = () => S.settings.provider || null;
+  const chosenSignedIn = () => {
+    const c = chosen();
+    return !!(c && statuses[c] && statuses[c].loggedIn);
+  };
+
+  function renderRow(name) {
+    const st = statuses[name];
+    if (!st) return;
+    const id = 'prov-' + name + '-' + token;
+    const isChosen = chosen() === name;
+    const radio = h('input', { type: 'radio', name: 'provider-' + token, id: id, value: name,
+                               checked: isChosen, disabled: !st.loggedIn || busy,
+                               'data-fk': 'prov:' + name + ':radio' });
+    radio.addEventListener('change', () => { if (radio.checked) choose(name); });
+
+    const body = h('div', { class: 'prov-body' },
+      h('label', { for: id },
+        h('span', { class: 'prov-name' }, st.label || name),
+        h('span', { class: 'prov-plan' }, st.plan || '')));
+
+    if (!st.installed) {
+      body.append(h('p', { class: 'prov-state' }, 'Not installed'));
+      const btn = h('button', { type: 'button', class: 'btn', 'data-fk': 'prov:' + name + ':install',
+                                disabled: busy }, 'Install');
+      btn.addEventListener('click', () => runAction(name, 'install_provider', btn));
+      body.append(h('div', { class: 'prov-actions' }, btn));
+      if (st.installCommand) {
+        body.append(h('div', { class: 'codeline' },
+          h('code', null, st.installCommand),
+          copyButton(() => st.installCommand, 'prov:' + name + ':copy')));
+      }
+      body.append(polls[name]
+        ? h('p', { class: 'hint waiting' }, h('span', { class: 'dot' }),
+            'Waiting for the install to finish. This updates by itself.')
+        : h('p', { class: 'hint' },
+            'Install opens a PowerShell window that runs this command. You can also run it yourself.'));
+    } else if (!st.loggedIn) {
+      const detail = st.detail && !/^not signed in$/i.test(st.detail) ? st.detail : '';
+      body.append(h('p', { class: 'prov-state' }, 'Installed, not signed in'));
+      if (detail) body.append(h('p', { class: 'hint', style: 'margin-top:2px' }, detail));
+      const btn = h('button', { type: 'button', class: 'btn', 'data-fk': 'prov:' + name + ':login',
+                                disabled: busy }, 'Sign in');
+      btn.addEventListener('click', () => runAction(name, 'login_provider', btn));
+      body.append(h('div', { class: 'prov-actions' }, btn));
+      body.append(polls[name]
+        ? h('p', { class: 'hint waiting' }, h('span', { class: 'dot' }),
+            'Waiting for you to finish signing in. This updates by itself.')
+        : h('p', { class: 'hint' },
+            'A sign-in window opens, then your browser. Finish there and come back.'));
+    } else {
+      body.append(h('p', { class: 'prov-state ok' }, icon('check', 14), st.detail || 'Signed in'));
+    }
+    if (errs[name]) body.append(h('p', { class: 'err', role: 'alert' }, errs[name]));
+
+    const row = h('div', { class: 'prov' + (st.loggedIn ? '' : ' off') },
+                  h('div', null, radio), body);
+    keepFocus(() => {
+      if (rows[name] && rows[name].isConnected) rows[name].replaceWith(row);
+      else el.append(row);
+    });
+    rows[name] = row;
+  }
+
+  function renderAll() { for (const n of order) renderRow(n); }
+
+  function setStatus(name, st) {
+    const sig = JSON.stringify(st) + '|' + !!polls[name] + '|' + (errs[name] || '') + '|' + chosen() + '|' + busy;
+    statuses[name] = st;
+    if (sigs[name] === sig) return false;
+    sigs[name] = sig;
+    renderRow(name);
+    return true;
+  }
+
+  async function load() {
+    const r = await call('providers');
+    if (!alive()) return;
+    loading.remove();
+    if (r.error) {
+      el.append(h('p', { class: 'err', role: 'alert' }, r.error));
+      return;
+    }
+    for (const n of order) if (r[n]) setStatus(n, r[n]);
+    for (const n of Object.keys(r)) if (!order.includes(n) && r[n] && r[n].name) { order.push(n); setStatus(n, r[n]); }
+    if (opts.autoChoose) {
+      const signed = order.filter((n) => statuses[n] && statuses[n].loggedIn);
+      if (!chosenSignedIn() && signed.length === 1 && !chosen()) await choose(signed[0]);
+    }
+    onChange();
+  }
+
+  async function runAction(name, method, btn) {
+    errs[name] = '';
+    btn.disabled = true;
+    const r = await call(method, name);
+    if (!alive()) return;
+    if (r.error) errs[name] = r.error;
+    poll(name);
+    sigs[name] = '';
+    renderRow(name);
+  }
+
+  function poll(name) {
+    if (polls[name]) return;
+    const tick = async () => {
+      if (!alive()) return;
+      const st = await call('provider_status', name);
+      if (!alive()) return;
+      if (!st.error && st.name) {
+        if (st.loggedIn) {
+          clearTimeout(polls[name]);
+          polls[name] = 0;
+          errs[name] = '';
+        }
+        setStatus(name, st);
+        if (st.loggedIn) {
+          if (opts.autoChoose && !chosenSignedIn()) await choose(name);
+          onChange();
+          return;
+        }
+      }
+      polls[name] = setTimeout(tick, 3000);
+    };
+    polls[name] = setTimeout(tick, 3000);
+  }
+
+  async function choose(name) {
+    busy = true;
+    for (const n of order) { sigs[n] = ''; }
+    renderAll();
+    const r = await call('choose_provider', name);
+    if (!alive()) return;
+    busy = false;
+    if (r.error) {
+      if (name) errs[name] = r.error;
+      else el.append(h('p', { class: 'err', role: 'alert' }, r.error));
+    } else if (r.settings) {
+      S.settings = r.settings;
+      S.ai = null;
+    }
+    for (const n of order) { sigs[n] = ''; }
+    renderAll();
+    onChange();
+    return r;
+  }
+
+  load();
+  return { el, chosen, chosenSignedIn, choose, statuses };
+}
+
+// =====================================================================
+// 2. Sign in (step 1 of 2)
+// =====================================================================
+SCREENS.signin = () => {
+  const cont = h('button', { type: 'button', class: 'btn primary lg', disabled: true }, 'Continue');
+  const contHint = h('p', { class: 'hint' }, 'Choose a signed-in account to continue, or skip for now.');
+  const err = h('p', { class: 'err', role: 'alert', hidden: true });
+  const picker = providerPicker({
+    autoChoose: true,
+    onChange: () => {
+      const ok = picker.chosenSignedIn();
+      cont.disabled = !ok;
+      contHint.hidden = ok;
+    },
+  });
+  cont.addEventListener('click', () => go('setup'));
+  const skip = h('button', { type: 'button', class: 'btn quiet edge' }, 'Skip for now');
+  skip.addEventListener('click', async () => {
+    skip.disabled = true;
+    const r = await call('choose_provider', null);
+    skip.disabled = false;
+    if (r.error) { err.textContent = r.error; err.hidden = false; return; }
+    if (r.settings) S.settings = r.settings;
+    S.ai = null;
+    go('setup');
+  });
+
+  app.append(h('main', { class: 'wrap narrow onb' },
+    h('p', { class: 'eyebrow' }, 'Step 1 of 2'),
+    h('h1', { class: 'h1', tabindex: '-1', 'data-autofocus': true }, 'Connect your AI'),
+    h('p', { class: 'lede' },
+      'SearchShip drafts your prep with your own subscription. You sign in through the official ' +
+      'Claude Code or Codex app, so SearchShip never sees your password.'),
+    picker.el,
+    err,
+    h('div', { class: 'foot' },
+      h('div', null, skip),
+      h('div', { class: 'right' }, cont)),
+    h('div', { style: 'display:flex;justify-content:flex-end' }, contHint),
+    h('p', { class: 'fine' }, 'Skipping is fine. Scanning works without AI; drafting stays off until you connect in Settings.')));
+};
+
+// =====================================================================
+// 3. Setup (step 2 of 2)
+// =====================================================================
+function resumeEditor(initial, fkPrefix) {
+  const ta = h('textarea', { class: 'field', rows: '12', spellcheck: false, 'data-fk': fkPrefix + ':resume',
+                             'aria-label': 'Resume', placeholder: 'Paste your resume here, as plain text or Markdown.' });
+  ta.value = initial || '';
+  const status = h('p', { class: 'hint', 'aria-live': 'polite' });
+  const load = (res, file) => {
+    if (res.error) { status.className = 'err'; status.textContent = res.error; return; }
+    ta.value = res.text;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    status.className = 'hint';
+    status.textContent = 'Loaded ' + file.name + '.';
+  };
+  const picker = filePicker('.md,.txt,text/markdown,text/plain', load, 2 * 1024 * 1024);
+  ta.setAttribute('data-drop', '');
+  ta.addEventListener('filedrop', async (e) => {
+    const file = e.detail;
+    if (!/\.(md|markdown|txt)$/i.test(file.name)) {
+      load({ error: 'Drop a .md or .txt file, or paste the text.' }, file);
+      return;
+    }
+    load(await readTextFile(file, 2 * 1024 * 1024), file);
+  });
+  const open = h('button', { type: 'button', class: 'btn', 'data-fk': fkPrefix + ':resume-open',
+                             onclick: () => picker.click() }, 'Open file…');
+  return { ta, status, open, picker };
+}
+
+SCREENS.setup = () => {
+  const token = S.token;
+  let savedResume = '';
+  const ed = resumeEditor('', 'setup');
+  const emptyNote = h('p', { class: 'hint' }, 'You can add it later in Settings. Drafting needs it.');
+  const syncNote = () => { emptyNote.hidden = !!ed.ta.value.trim(); };
+  ed.ta.addEventListener('input', syncNote);
+
+  const importStatus = h('p', { class: 'hint', 'aria-live': 'polite' });
+  const importBtn = h('button', { type: 'button', class: 'btn' }, 'Choose file…');
+  const importPicker = filePicker('.json,application/json', async (res) => {
+    if (res.error) { importStatus.className = 'err'; importStatus.textContent = res.error; return; }
+    importBtn.disabled = true;
+    importStatus.className = 'hint';
+    importStatus.textContent = 'Importing…';
+    const r = await call('import_postings', res.text);
+    if (token !== S.token) return;
+    importBtn.disabled = false;
+    if (r.error) { importStatus.className = 'err'; importStatus.textContent = r.error; return; }
+    const added = r.added || 0, kept = r.kept || 0;
+    importStatus.className = 'hint ok-text';
+    importStatus.textContent = 'Imported ' + plural(added, 'row') + (kept ? ' (' + kept + ' already here).' : '.');
+  }, 50 * 1024 * 1024);
+  importBtn.addEventListener('click', () => importPicker.click());
+
+  const err = h('p', { class: 'err', role: 'alert', hidden: true });
+  const finish = h('button', { type: 'button', class: 'btn primary lg' }, 'Finish');
+  const back = h('button', { type: 'button', class: 'btn quiet edge' }, icon('back'), 'Back');
+  back.addEventListener('click', () => go('signin'));
+
+  finish.addEventListener('click', async () => {
+    err.hidden = true;
+    finish.disabled = true;
+    const text = ed.ta.value;
+    if (text.trim() && text !== savedResume) {
+      const r = await call('save_resume', text);
+      if (token !== S.token) return;
+      if (r.error) { err.textContent = r.error; err.hidden = false; finish.disabled = false; return; }
+      savedResume = text;
+      S.hasResume = true;
+    }
+    const r = await call('finish_onboarding');
+    if (token !== S.token) return;
+    if (r.error) { err.textContent = r.error; err.hidden = false; finish.disabled = false; return; }
+    if (r.settings) S.settings = r.settings;
+    go('tracker', { scanStarted: !!r.scanStarted });
+  });
+
+  app.append(h('main', { class: 'wrap narrow onb' },
+    h('p', { class: 'eyebrow' }, 'Step 2 of 2'),
+    h('h1', { class: 'h1', tabindex: '-1', 'data-autofocus': true }, 'Add your resume'),
+    h('p', { class: 'lede' },
+      'Prep is written only from facts in your resume. Paste it as text or Markdown, or open a file.'),
+    h('div', { class: 'block' }, ed.ta,
+      h('div', { class: 'row' }, ed.open, ed.picker),
+      ed.status, emptyNote),
+    h('div', { class: 'block', style: 'padding-top:24px;border-top:1px solid var(--line)' },
+      h('h2', null, 'Import your old tracker'),
+      h('p', { class: 'desc' }, 'Optional. Choose the postings.json from the GitHub version to bring your rows over.'),
+      h('div', { class: 'row' }, importBtn, importPicker),
+      importStatus),
+    err,
+    h('div', { class: 'foot' }, h('div', null, back), h('div', { class: 'right' }, finish))));
+
+  call('settings_bundle').then((b) => {
+    if (token !== S.token || b.error) return;
+    if (!ed.ta.value && b.resume) {
+      ed.ta.value = b.resume;
+      savedResume = b.resume;
+    }
+    syncNote();
+  });
+  syncNote();
+};
+
+// =====================================================================
+// 4. Tracker
+// =====================================================================
+function readHashTab() {
+  const k = decodeURIComponent(location.hash.replace(/^#/, ''));
+  return tabByKey(k) ? k : null;
+}
+
+function storedTab() {
+  try {
+    const k = localStorage.getItem('searchship.tab');
+    return tabByKey(k) ? k : null;
+  } catch (e) { return null; }
+}
+
+SCREENS.tracker = (opts) => {
+  const fromHash = readHashTab();
+  const remembered = fromHash || storedTab();
+  S.tab = remembered || 'ready';
+  S.tabChosen = !!remembered;
+  S.limit = PAGE;
+
+  const ui = S.ui;
+  ui.scanBtn = h('button', { type: 'button', class: 'btn', 'data-fk': 'scan' }, icon('scan', 15), 'Scan now');
+  ui.scanBtn.addEventListener('click', startScan);
+  const settingsBtn = h('button', { type: 'button', class: 'btn icon', 'aria-label': 'Settings', title: 'Settings',
+                                    onclick: () => go('settings') }, icon('settings'));
+  ui.meta = h('p', { class: 'meta' });
+  ui.problems = h('details', { class: 'problems', hidden: true });
+  ui.progressText = h('p', { class: 'progress-text' });
+  ui.progress = h('div', { class: 'progress', hidden: true, role: 'status' },
+                  h('div', { class: 'bar' }), ui.progressText);
+  ui.notice = h('div', { class: 'notice', hidden: true, role: 'status' });
+  ui.hint = h('div', { class: 'hintbar', hidden: true });
+
+  ui.tabs = {};
+  const tablist = h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Postings' });
+  ui.tablist = tablist;
+  tablist.addEventListener('scroll', syncTabFade, { passive: true });
+  for (const t of TABS) {
+    const n = h('span', { class: 'n' }, '');
+    const b = h('button', { type: 'button', class: 'tab', role: 'tab', id: 'tab-' + t.key,
+                            'aria-controls': 'panel', 'aria-selected': 'false', tabindex: '-1' }, t.label, n);
+    b.addEventListener('click', () => setTab(t.key));
+    b.addEventListener('keydown', onTabKey);
+    ui.tabs[t.key] = { b, n };
+    tablist.append(b);
+  }
+  ui.search = h('input', { type: 'search', class: 'field', placeholder: 'Search company or title',
+                           'aria-label': 'Search company or title', autocomplete: 'off', spellcheck: false,
+                           value: S.query });
+  let searchTimer = 0;
+  ui.search.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { S.query = ui.search.value; S.limit = PAGE; renderList(); }, 90);
+  });
+  ui.search.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && ui.search.value) { e.preventDefault(); ui.search.value = ''; S.query = ''; renderList(); }
+  });
+
+  ui.list = h('ul', { class: 'list' });
+  ui.panel = h('div', { id: 'panel', role: 'tabpanel' }, ui.list);
+  ui.more = h('div', { class: 'more', hidden: true });
+
+  app.append(h('main', { class: 'wrap' },
+    h('header', { class: 'top' },
+      h('h1', { class: 'brand' }, 'SearchShip'),
+      h('div', { class: 'top-actions' }, ui.scanBtn, settingsBtn)),
+    ui.meta, ui.problems, ui.progress, ui.notice, ui.hint,
+    h('div', { class: 'toolbar' }, tablist,
+      h('div', { class: 'search' }, icon('search', 15), ui.search)),
+    ui.panel, ui.more));
+
+  ui.list.append(h('li', { class: 'empty' }, 'Loading postings…'));
+  syncTabs();
+  renderMeta();
+  renderJob();
+  if (S.pendingNotice) { showNotice(S.pendingNotice); S.pendingNotice = null; }
+
+  loadPostings();
+  refreshAi();
+  if (opts.scanStarted) S.job = { running: true, kind: 'scan', log: [] };
+  renderJob();
+  pollJob();
+};
+
+async function loadPostings() {
+  const token = S.token;
+  const r = await call('postings');
+  if (token !== S.token) return;
+  if (r.error) {
+    clear(S.ui.list);
+    S.ui.list.append(h('li', { class: 'empty err', role: 'alert' }, r.error));
+    return;
+  }
+  S.postings = r.postings && typeof r.postings === 'object' ? r.postings : {};
+  S.state = r.state || {};
+  S.loaded = true;
+  if (!S.tabChosen) {
+    const c = counts('');
+    if (!c.ready && c.new) S.tab = 'new';
+    syncTabs();
+  }
+  renderMeta();
+  renderList();
+}
+
+async function refreshAi() {
+  const token = S.token;
+  const r = await call('ai_ready');
+  if (token !== S.token) return;
+  S.ai = r.error ? { ready: false, label: null } : { ready: !!r.ready, label: r.label || null };
+  renderHint();
+  if (S.loaded) renderList();
+}
+
+function renderHint() {
+  const el = S.ui.hint;
+  if (!el) return;
+  clear(el);
+  el.hidden = true;
+  if (!S.ai) return;
+  if (!S.ai.ready) {
+    el.append(h('span', null, 'Drafting is off until you connect Claude or ChatGPT.'),
+              h('button', { type: 'button', class: 'btn', onclick: () => go('settings') }, 'Connect'));
+    el.hidden = false;
+  } else if (!S.hasResume) {
+    el.append(h('span', null, 'Add your resume so ' + (S.ai.label || 'the AI') + ' can draft prep.'),
+              h('button', { type: 'button', class: 'btn', onclick: () => go('settings', { focus: 'resume' }) }, 'Add resume'));
+    el.hidden = false;
+  }
+}
+
+function renderMeta() {
+  const ui = S.ui;
+  if (!ui.meta) return;
+  const st = S.state || {};
+  const parts = [];
+  if (st.lastRun) parts.push('Last scan ' + relTime(st.lastRun));
+  else parts.push('Not scanned yet');
+  if (st.summary) parts.push(str(st.summary));
+  ui.meta.textContent = parts.join(' · ');
+  const errors = Array.isArray(st.errors) ? st.errors.filter(Boolean).map(str) : [];
+  const sig = JSON.stringify(errors);
+  if (ui.problems._sig === sig) return;
+  ui.problems._sig = sig;
+  clear(ui.problems);
+  ui.problems.hidden = !errors.length;
+  if (errors.length) {
+    ui.problems.append(
+      h('summary', null, plural(errors.length, 'problem') + ' in the last scan', icon('chevron', 14)),
+      h('ul', null, errors.map((e) => h('li', null, e))));
+  }
+}
+
+function setTab(key, focus) {
+  if (!tabByKey(key)) return;
+  S.tabChosen = true;
+  try { localStorage.setItem('searchship.tab', key); } catch (e) { /* storage unavailable */ }
+  if (location.hash !== '#' + key) {
+    try { history.replaceState(null, '', '#' + key); } catch (e) { location.hash = key; }
+  }
+  if (S.tab === key) { syncTabs(focus); return; }
+  S.tab = key;
+  S.limit = PAGE;
+  syncTabs(focus);
+  renderList();
+}
+
+function syncTabs(focus) {
+  const ui = S.ui;
+  if (!ui.tabs) return;
+  for (const t of TABS) {
+    const on = t.key === S.tab;
+    ui.tabs[t.key].b.setAttribute('aria-selected', on ? 'true' : 'false');
+    ui.tabs[t.key].b.tabIndex = on ? 0 : -1;
+  }
+  const cur = ui.tabs[S.tab].b;
+  ui.panel.setAttribute('aria-labelledby', cur.id);
+  if (focus) cur.focus();
+  if (cur.scrollIntoView && cur.parentNode.scrollWidth > cur.parentNode.clientWidth) {
+    cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  syncTabFade();
+}
+
+function syncTabFade() {
+  const t = S.ui.tablist;
+  if (!t) return;
+  const max = t.scrollWidth - t.clientWidth;
+  t.classList.toggle('fade-r', max > 2 && t.scrollLeft < max - 2);
+  t.classList.toggle('fade-l', max > 2 && t.scrollLeft > 2);
+}
+
+function onTabKey(e) {
+  const i = TABS.findIndex((t) => t.key === S.tab);
+  let j = null;
+  if (e.key === 'ArrowRight') j = (i + 1) % TABS.length;
+  else if (e.key === 'ArrowLeft') j = (i - 1 + TABS.length) % TABS.length;
+  else if (e.key === 'Home') j = 0;
+  else if (e.key === 'End') j = TABS.length - 1;
+  if (j === null) return;
+  e.preventDefault();
+  setTab(TABS[j].key, true);
+}
+
+function matches(r, q) {
+  if (!q) return true;
+  return (str(r.company) + '\n' + str(r.title)).toLowerCase().includes(q);
+}
+
+function allRows() {
+  const out = [];
+  for (const id of Object.keys(S.postings)) {
+    const r = S.postings[id];
+    if (r && typeof r === 'object') out.push({ id, r });
+  }
+  return out;
+}
+
+function counts(q) {
+  const c = {};
+  for (const t of TABS) c[t.key] = 0;
+  for (const x of allRows()) {
+    if (!matches(x.r, q)) continue;
+    for (const t of TABS) if (t.match(str(x.r.status))) c[t.key] += 1;
+  }
+  return c;
+}
+
+function renderCounts() {
+  const ui = S.ui;
+  if (!ui.tabs || !S.loaded) return;
+  const c = counts(S.query.trim().toLowerCase());
+  for (const t of TABS) {
+    ui.tabs[t.key].n.textContent = String(c[t.key]);
+    ui.tabs[t.key].b.setAttribute('aria-label', t.label + ', ' + c[t.key]);
+  }
+  syncTabFade();
+}
+
+function renderList() {
+  const ui = S.ui;
+  if (!ui.list || !S.loaded) return;
+  renderCounts();
+  const q = S.query.trim().toLowerCase();
+  const tab = tabByKey(S.tab);
+  const items = allRows().filter((x) => tab.match(str(x.r.status)) && matches(x.r, q)).sort(tab.sort);
+  keepFocus(() => {
+    clear(ui.list);
+    S.cards = new Map();
+    if (!items.length) {
+      ui.list.append(h('li', { class: 'empty' },
+        q ? 'No postings match “' + S.query.trim() + '” here.' : tab.empty));
+    }
+    for (const x of items.slice(0, S.limit)) {
+      const el = card(x.id, x.r);
+      S.cards.set(x.id, el);
+      ui.list.append(el);
+    }
+    clear(ui.more);
+    const left = items.length - S.limit;
+    ui.more.hidden = left <= 0;
+    if (left > 0) {
+      ui.more.append(h('button', { type: 'button', class: 'btn', 'data-fk': 'more',
+        onclick: () => { S.limit += PAGE; renderList(); } }, 'Show ' + Math.min(left, PAGE) + ' more'));
+    }
+  });
+}
+
+const PREP_FIELDS = [['fit', 'Fit'], ['project', 'Project to lead with'], ['why', 'Why this company']];
+let cardSeq = 0;
+
+function card(id, r) {
+  const status = str(r.status) || 'new';
+  const prep = r.prep && typeof r.prep === 'object' ? r.prep : null;
+  const hasPrep = !!(prep && PREP_FIELDS.some(([k]) => str(prep[k]).trim()));
+  const open = hasPrep && S.expanded.has(id);
+  const li = h('li', { class: 'card' + (hasPrep ? ' expandable' : '') + (open ? ' open' : '') });
+  const prepId = 'prep-' + (++cardSeq);
+
+  const facts = [];
+  const locs = (Array.isArray(r.locations) ? r.locations : (r.locations ? [r.locations] : []))
+    .map(str).map((s) => s.trim()).filter(Boolean);
+  if (locs.length) facts.push(locs.length > 4 ? locs.slice(0, 3).join('; ') + '; +' + (locs.length - 3) + ' more'
+                                               : locs.join('; '));
+  if (fmtDay(r.posted)) facts.push('Posted ' + fmtDay(r.posted));
+  const sc = scoreOf(r);
+  if (sc !== null) facts.push('Score ' + sc.toFixed(1));
+  if (r.appliedOn && fmtDay(r.appliedOn)) facts.push('Applied ' + fmtDay(r.appliedOn));
+
+  const head = h('div', { class: 'card-head' },
+    h('div', { class: 'card-main' },
+      h('div', { class: 'line1' },
+        h('span', { class: 'company' }, str(r.company) || 'Unknown company'),
+        h('span', { class: 'chip st-' + status }, STATUS_LABEL[status] || status)),
+      h('div', { class: 'title' }, str(r.title)),
+      facts.length ? h('div', { class: 'facts' }, facts.join(' · ')) : null),
+    hasPrep ? h('span', { class: 'chev' }, icon('chevron')) : null);
+  if (locs.length > 4) head.querySelector('.facts').title = locs.join('; ');
+  li.append(head);
+
+  if (hasPrep) {
+    head.setAttribute('role', 'button');
+    head.tabIndex = 0;
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    head.setAttribute('aria-controls', prepId);
+    head.setAttribute('data-fk', 'card:' + id + ':head');
+    head.title = open ? 'Hide prep' : 'Show prep';
+    const toggle = () => {
+      if (S.expanded.has(id)) S.expanded.delete(id); else S.expanded.add(id);
+      replaceCard(id, 'head');
+    };
+    head.addEventListener('click', () => {
+      const sel = window.getSelection && window.getSelection();
+      if (sel && String(sel).trim() && head.contains(sel.anchorNode)) return;   // selecting text, not toggling
+      toggle();
+    });
+    head.addEventListener('keydown', (e) => {
+      if (e.target !== head) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  }
+
+  const notes = str(r.notes).trim();
+  if (notes && !S.editing.has(id)) li.append(h('p', { class: 'note' }, h('span', { class: 'note-label' }, 'Note'), notes));
+
+  if (open) {
+    li.append(h('div', { class: 'prep', id: prepId },
+      PREP_FIELDS.filter(([k]) => str(prep[k]).trim()).map(([k, label]) =>
+        h('section', { class: 'prep-item' },
+          h('h3', { class: 'prep-label' }, label),
+          h('p', { class: 'prep-text' }, str(prep[k])),
+          copyButton(() => str(prep[k]), 'card:' + id + ':copy:' + k)))));
+  }
+
+  const err = h('p', { class: 'err', role: 'alert', hidden: true });
+
+  if (S.editing.has(id)) {
+    const ta = h('textarea', { class: 'field', rows: '3', 'aria-label': 'Note for ' + str(r.company),
+                               'data-fk': 'card:' + id + ':note-text', placeholder: 'Add a note' });
+    ta.value = S.editing.get(id);
+    ta.addEventListener('input', () => S.editing.set(id, ta.value));
+    const save = h('button', { type: 'button', class: 'btn primary', 'data-fk': 'card:' + id + ':note-save' }, 'Save note');
+    const cancel = h('button', { type: 'button', class: 'btn quiet', 'data-fk': 'card:' + id + ':note-cancel' }, 'Cancel');
+    const doSave = () => runAct(id, 'note', ta.value, li, err);
+    const doCancel = () => { S.editing.delete(id); replaceCard(id, 'note'); };
+    save.addEventListener('click', doSave);
+    cancel.addEventListener('click', doCancel);
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doSave(); }
+      if (e.key === 'Escape') { e.preventDefault(); doCancel(); }
+    });
+    li.append(h('div', { class: 'note-edit' }, ta, h('div', { class: 'row' }, save, cancel)));
+    li._focusNote = ta;
+  }
+
+  const acts = h('div', { class: 'actions' });
+  const btn = (label, cmd, emphasis) => {
+    const b = h('button', { type: 'button', class: 'btn' + (emphasis ? ' go' : ''), 'data-fk': 'card:' + id + ':' + cmd }, label);
+    b.addEventListener('click', () => runAct(id, cmd, null, li, err));
+    return b;
+  };
+  const draftBtn = (label) => {
+    const b = h('button', { type: 'button', class: 'btn', 'data-idle-only': '', 'data-fk': 'card:' + id + ':draft',
+                            disabled: !!S.job.running, title: S.job.running ? 'Wait for the current task to finish' : null },
+                label);
+    b.addEventListener('click', () => startDraft(id, b, err));
+    return b;
+  };
+  const aiReady = !!(S.ai && S.ai.ready);
+  if (status === 'new') {
+    if (aiReady) acts.append(draftBtn('Draft'));
+    acts.append(btn('Approve', 'approve', true), btn('Skip', 'skip'));
+  } else if (status === 'ready') {
+    acts.append(btn('Applied', 'applied', true), btn('Skip', 'skip'));
+    if (aiReady) acts.append(draftBtn('Redraft'));
+  } else if (status === 'applied') {
+    acts.append(btn('Interview', 'interview', true));
+  } else if (status === 'skipped' || status === 'closed') {
+    acts.append(btn('Restore', 'restore'));
+  }
+  const url = str(r.url).trim();
+  if (/^https?:\/\//i.test(url)) {
+    const openBtn = h('button', { type: 'button', class: 'btn quiet push', title: url, 'data-fk': 'card:' + id + ':open' },
+                      'Open', icon('external', 14));
+    openBtn.addEventListener('click', async () => {
+      const res = await call('open_url', url);
+      if (res.error) { err.textContent = res.error; err.hidden = false; }
+    });
+    acts.append(openBtn);
+  }
+  if (!S.editing.has(id)) {
+    const noteBtn = h('button', { type: 'button', class: 'btn quiet' + (acts.querySelector('.push') ? '' : ' push'),
+                                  'data-fk': 'card:' + id + ':note', 'aria-label': notes ? 'Edit note' : 'Add note' },
+                      'Note');
+    noteBtn.addEventListener('click', () => {
+      S.editing.set(id, str(r.notes));
+      replaceCard(id, 'note-text');
+    });
+    acts.append(noteBtn);
+  }
+  li.append(acts, err);
+  return li;
+}
+
+function replaceCard(id, focusKey) {
+  const old = S.cards.get(id);
+  const r = S.postings[id];
+  if (!old || !r || !old.isConnected) return;
+  const el = card(id, r);
+  old.replaceWith(el);
+  S.cards.set(id, el);
+  if (focusKey) {
+    const target = el.querySelector('[data-fk="' + CSS.escape('card:' + id + ':' + focusKey) + '"]') ||
+                   el.querySelector('.actions button:not(:disabled)');
+    if (target) target.focus({ preventScroll: true });
+  }
+}
+
+async function runAct(id, cmd, text, li, err) {
+  err.hidden = true;
+  const buttons = Array.from(li.querySelectorAll('button'));
+  buttons.forEach((b) => { b.disabled = true; });
+  const r = cmd === 'note' ? await call('act', id, cmd, text) : await call('act', id, cmd);
+  if (!li.isConnected) return;
+  if (r.error || !r.row) {
+    buttons.forEach((b) => { b.disabled = b.hasAttribute('data-idle-only') && !!S.job.running; });
+    err.textContent = r.error || 'Something went wrong.';
+    err.hidden = false;
+    return;
+  }
+  S.postings[id] = r.row;
+  if (cmd === 'note') S.editing.delete(id);
+  replaceCard(id, cmd === 'note' ? 'note' : null);
+  if (cmd !== 'note') {
+    const el = S.cards.get(id);
+    const first = el && el.querySelector('.actions button:not(:disabled)');
+    if (first) first.focus({ preventScroll: true });
+  }
+  renderCounts();
+}
+
+async function startDraft(id, b, err) {
+  err.hidden = true;
+  b.disabled = true;
+  const r = await call('draft', [id]);
+  if (r.error || !r.started) {
+    b.disabled = !!S.job.running;
+    err.textContent = r.error || 'Another task is running. Try again when it finishes.';
+    err.hidden = false;
+    if (!r.error) pollJob();
+    return;
+  }
+  const row = S.postings[id] || {};
+  S.job = { running: true, kind: 'draft', log: ['Drafting prep for ' + (str(row.company) || 'this posting') + '…'] };
+  renderJob();
+  scheduleJob(800);
+}
+
+async function startScan() {
+  const b = S.ui.scanBtn;
+  if (b) b.disabled = true;
+  const r = await call('scan');
+  if (r.error) {
+    if (b) b.disabled = false;
+    showNotice({ bad: true, text: r.error });
+    return;
+  }
+  if (!r.started) showNotice({ text: 'A scan or draft is already running.' });
+  S.job = { running: true, kind: 'scan', log: ['Starting scan…'], seq: S.job.seq };
+  renderJob();
+  scheduleJob(500);
+}
+
+// ---------- background job polling ----------
+function scheduleJob(ms) {
+  clearTimeout(S.jobTimer);
+  S.jobTimer = setTimeout(pollJob, ms);
+}
+
+async function pollJob() {
+  clearTimeout(S.jobTimer);
+  const st = await call('job');
+  // job() reports a failed job in its own `error` field, so a call failure is
+  // recognised by the missing `running` flag rather than by `error`.
+  if (typeof st.running !== 'boolean') {
+    scheduleJob(S.job.running ? 2000 : 20000);
+    return;
+  }
+  const seq = typeof st.seq === 'number' ? st.seq : 0;
+  if (S.jobSeq === null) S.jobSeq = st.running || S.job.running ? seq - 1 : seq;
+  S.job = st;
+  if (st.running) {
+    renderJob();
+    scheduleJob(1000);
+    return;
+  }
+  if (seq > S.jobSeq) {
+    S.jobSeq = seq;
+    await jobFinished(st);
+  }
+  renderJob();
+  scheduleJob(20000);   // a slow idle check picks up scans started by the app itself
+}
+
+async function jobFinished(st) {
+  const notice = describeJob(st);
+  const r = await call('postings');
+  if (!r.error) {
+    S.postings = r.postings && typeof r.postings === 'object' ? r.postings : S.postings;
+    S.state = r.state || S.state;
+    S.loaded = true;
+  }
+  if (S.screen === 'tracker') {
+    renderMeta();
+    renderList();
+    showNotice(notice);
+  } else {
+    S.pendingNotice = notice;
+  }
+}
+
+function describeJob(st) {
+  const kind = st.kind === 'draft' ? 'draft' : 'scan';
+  if (st.error) {
+    return { bad: true, text: (kind === 'draft' ? 'Drafting failed: ' : 'Scan failed: ') + str(st.error) };
+  }
+  const res = st.result || {};
+  if (kind === 'draft') {
+    const problems = Array.isArray(res.problems) ? res.problems.map(str) : [];
+    let text = 'Drafted ' + (res.ready || 0);
+    if (res.skipped) text += ' · skipped ' + res.skipped;
+    if (res.changedMeanwhile) text += ' · ' + res.changedMeanwhile + ' changed while drafting, left as is';
+    return { text, details: problems, detailsLabel: plural(problems.length, 'draft check') };
+  }
+  const errors = Array.isArray(res.errors) ? res.errors : [];
+  let text = 'Scan finished · ' + (str(res.summary) || 'done');
+  if (errors.length) text += ' · ' + plural(errors.length, 'problem') + ', listed above';
+  return { text };
+}
+
+function renderJob() {
+  const ui = S.ui;
+  const running = !!S.job.running;
+  if (ui.progress) {
+    ui.progress.hidden = !running;
+    const log = Array.isArray(S.job.log) ? S.job.log : [];
+    const last = log.length ? str(log[log.length - 1]) : '';
+    ui.progressText.textContent = last || (S.job.kind === 'draft' ? 'Drafting…' : 'Scanning…');
+  }
+  if (ui.scanBtn) {
+    ui.scanBtn.disabled = running;
+    ui.scanBtn.lastChild.textContent = running ? (S.job.kind === 'draft' ? 'Drafting…' : 'Scanning…') : 'Scan now';
+  }
+  for (const b of document.querySelectorAll('[data-idle-only]')) {
+    b.disabled = running;
+    b.title = running ? 'Wait for the current task to finish' : '';
+  }
+}
+
+function showNotice(n) {
+  const el = S.ui.notice;
+  if (!el) { S.pendingNotice = n; return; }
+  clear(el);
+  el.className = 'notice' + (n.bad ? ' bad' : '');
+  const body = h('div', { class: 'notice-body' }, h('div', { class: 'notice-text' }, n.text));
+  const details = (n.details || []).filter(Boolean);
+  if (details.length) {
+    body.append(h('details', null, h('summary', null, n.detailsLabel || 'Details', icon('chevron', 14)),
+                  h('ul', null, details.map((d) => h('li', null, d)))));
+  }
+  el.append(body, h('button', { type: 'button', class: 'btn quiet icon', 'aria-label': 'Dismiss',
+                                onclick: () => { el.hidden = true; } }, icon('close', 15)));
+  el.hidden = false;
+  clearTimeout(S.noticeTimer);
+  if (!n.bad && !details.length) S.noticeTimer = setTimeout(() => { el.hidden = true; }, 12000);
+}
+
+// =====================================================================
+// 5. Settings
+// =====================================================================
+const SOURCES = [
+  ['simplify', 'SimplifyJobs list', 'The Summer 2027 internships list on GitHub.'],
+  ['vanshb03', 'vanshb03 list', 'A second community Summer 2027 list on GitHub.'],
+  ['boards', 'Company career boards', 'Greenhouse, Lever and Ashby boards listed below.'],
+  ['websearch', 'AI web search', 'Asks your AI account to look for postings the lists miss. Uses plan usage once a day.'],
+];
+const BOARD_RE = /^(greenhouse|lever|ashby)\s*:\s*[A-Za-z0-9._-]+\s*(=.*)?$/i;
+
+SCREENS.settings = (opts) => {
+  const token = S.token;
+  const alive = () => token === S.token;
+  let snap = null;
+
+  const status = h('span', { class: 'set-status', 'aria-live': 'polite' });
+  const saveTop = h('button', { type: 'button', class: 'btn primary', disabled: true }, 'Save');
+  const saveBottom = h('button', { type: 'button', class: 'btn primary', disabled: true }, 'Save');
+  const backBtn = h('button', { type: 'button', class: 'btn quiet edge', 'data-autofocus': true }, icon('back'), 'Back');
+  const leaveBar = h('div', { class: 'leave', hidden: true, role: 'alert' });
+
+  // AI account
+  const aiNote = h('p', { class: 'hint' });
+  const offBtn = h('button', { type: 'button', class: 'btn quiet' }, 'Turn off AI');
+  const syncAi = () => {
+    const c = picker.chosen();
+    offBtn.hidden = !c;
+    aiNote.textContent = c ? 'Changes here apply right away.' : 'No AI account is in use, so drafting and web search are off.';
+  };
+  const picker = providerPicker({ onChange: syncAi });
+  offBtn.addEventListener('click', async () => { offBtn.disabled = true; await picker.choose(null); offBtn.disabled = false; syncAi(); });
+
+  // Sources
+  const srcBoxes = {};
+  const srcList = h('div', null, SOURCES.map(([key, label, desc]) => {
+    const id = 'src-' + key;
+    srcBoxes[key] = h('input', { type: 'checkbox', id, disabled: true });
+    return h('label', { class: 'check', for: id }, srcBoxes[key], h('span', null, label, h('small', null, desc)));
+  }));
+
+  const boards = h('textarea', { class: 'field mono', rows: '9', spellcheck: false, disabled: true,
+                                 'aria-label': 'Career boards', placeholder: 'greenhouse:stripe = Stripe' });
+  const boardsWarn = h('p', { class: 'err', hidden: true });
+  const checkBoards = () => {
+    const bad = boards.value.split(/\r?\n/).map((l, i) => [l.trim(), i + 1]).filter(([l]) => l && !BOARD_RE.test(l));
+    boardsWarn.hidden = !bad.length;
+    boardsWarn.textContent = bad.length
+      ? 'Check line ' + bad.slice(0, 3).map(([, n]) => n).join(', ') + (bad.length > 3 ? '…' : '') +
+        ': use greenhouse:, lever: or ashby: and a board name.'
+      : '';
+  };
+  boards.addEventListener('input', checkBoards);
+
+  const skip = h('textarea', { class: 'field', rows: '6', spellcheck: false, disabled: true,
+                               'aria-label': 'Skip companies', placeholder: 'One company per line' });
+  const ed = resumeEditor('', 'settings');
+  ed.ta.disabled = true;
+  const auto = h('input', { type: 'checkbox', id: 'auto-scan', disabled: true });
+
+  const dataPath = h('p', { class: 'path' }, S.boot && S.boot.dataDir ? S.boot.dataDir : '');
+  const dataErr = h('p', { class: 'err', role: 'alert', hidden: true });
+  const openFolder = h('button', { type: 'button', class: 'btn' }, icon('folder', 15), 'Open data folder');
+  openFolder.addEventListener('click', async () => {
+    dataErr.hidden = true;
+    const r = await call('open_data_folder');
+    if (r.error) { dataErr.textContent = r.error; dataErr.hidden = false; }
+  });
+  const importStatus = h('p', { class: 'hint', 'aria-live': 'polite' });
+  const importBtn = h('button', { type: 'button', class: 'btn' }, 'Import postings…');
+  const importPicker = filePicker('.json,application/json', async (res) => {
+    if (res.error) { importStatus.className = 'err'; importStatus.textContent = res.error; return; }
+    const r = await call('import_postings', res.text);
+    if (!alive()) return;
+    if (r.error) { importStatus.className = 'err'; importStatus.textContent = r.error; return; }
+    importStatus.className = 'hint ok-text';
+    importStatus.textContent = 'Imported ' + plural(r.added || 0, 'row') + (r.kept ? ' (' + r.kept + ' already here).' : '.');
+  }, 50 * 1024 * 1024);
+  importBtn.addEventListener('click', () => importPicker.click());
+
+  const sec = (title, desc, ...body) => h('section', { class: 'sec' },
+    h('div', null, h('h2', null, title), desc ? h('p', { class: 'desc' }, desc) : null),
+    h('div', null, body));
+
+  const values = () => ({
+    sources: Object.fromEntries(SOURCES.map(([k]) => [k, !!srcBoxes[k].checked])),
+    boards: boards.value,
+    skip: skip.value,
+    resume: ed.ta.value,
+    autoScan: !!auto.checked,
+  });
+  const dirty = () => !!snap && JSON.stringify(values()) !== JSON.stringify(snap);
+  const syncDirty = () => {
+    const d = dirty();
+    saveTop.disabled = saveBottom.disabled = !d;
+    if (d && status.textContent === 'Saved') status.textContent = '';
+    if (!d) leaveBar.hidden = true;
+  };
+
+  async function save() {
+    if (!snap) return false;
+    saveTop.disabled = saveBottom.disabled = true;
+    status.className = 'set-status';
+    status.textContent = 'Saving…';
+    const v = values();
+    const problems = [];
+    const lines = v.boards.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const r1 = await call('save_settings', { sources: v.sources, boards: lines, autoScan: v.autoScan });
+    if (r1.error) problems.push(r1.error); else if (r1.settings) S.settings = r1.settings;
+    if (v.skip !== snap.skip) {
+      const r2 = await call('save_skip_companies', v.skip);
+      if (r2.error) problems.push('Skip companies: ' + r2.error);
+    }
+    if (v.resume !== snap.resume) {
+      const r3 = await call('save_resume', v.resume);
+      if (r3.error) problems.push('Resume: ' + r3.error);
+      else S.hasResume = !!v.resume.trim();
+    }
+    if (!alive()) return !problems.length;
+    if (problems.length) {
+      status.className = 'set-status bad';
+      status.textContent = problems.join(' ');
+      syncDirty();
+      return false;
+    }
+    snap = v;
+    status.textContent = 'Saved';
+    syncDirty();
+    return true;
+  }
+
+  saveTop.addEventListener('click', save);
+  saveBottom.addEventListener('click', save);
+  backBtn.addEventListener('click', () => {
+    if (!dirty()) { go('tracker'); return; }
+    clear(leaveBar);
+    leaveBar.append(h('span', null, 'You have unsaved changes.'),
+      h('button', { type: 'button', class: 'btn primary', onclick: async () => { if (await save()) go('tracker'); } }, 'Save and go back'),
+      h('button', { type: 'button', class: 'btn', onclick: () => go('tracker') }, 'Discard'));
+    leaveBar.hidden = false;
+    leaveBar.querySelector('.btn').focus();
+  });
+
+  const main = h('main', { class: 'wrap' },
+    h('header', { class: 'set-head' }, backBtn, h('h1', null, 'Settings'), status, saveTop),
+    leaveBar,
+    sec('AI account', 'Drafting and web search use this account’s plan. Sign-in happens in the official app; SearchShip never sees your password.',
+      picker.el, h('div', { class: 'row spread' }, aiNote, offBtn)),
+    sec('Sources', 'Where scans look for postings.', srcList),
+    sec('Career boards', 'One per line, like greenhouse:stripe = Stripe. Supported: greenhouse:, lever:, ashby:.',
+      boards, boardsWarn),
+    sec('Skip companies', 'Postings from these companies are never added. One per line.', skip),
+    h('section', { class: 'sec', id: 'resume-section' },
+      h('div', null, h('h2', null, 'Resume'), h('p', { class: 'desc' }, 'The only source of facts about you when drafting prep.')),
+      h('div', null, ed.ta, h('div', { class: 'row' }, ed.open, ed.picker), ed.status)),
+    sec('Scanning', null,
+      h('label', { class: 'check', for: 'auto-scan' }, auto,
+        h('span', null, 'Scan when SearchShip opens and once a day while it is open'))),
+    sec('Data', 'Postings, settings and your resume are plain files in this folder.',
+      dataPath, h('div', { class: 'row' }, openFolder, importBtn, importPicker), dataErr, importStatus,
+      h('p', { class: 'hint' }, 'SearchShip ' + str(S.boot && S.boot.version))),
+    h('div', { class: 'set-foot' }, saveBottom));
+  main.addEventListener('input', syncDirty);
+  main.addEventListener('change', syncDirty);
+  main.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); if (dirty()) save(); }
+  });
+  app.append(main);
+  syncAi();
+
+  call('settings_bundle').then((b) => {
+    if (!alive()) return;
+    if (b.error) { status.className = 'set-status bad'; status.textContent = b.error; return; }
+    const s = b.settings || {};
+    S.settings = s;
+    const src = s.sources || {};
+    for (const [k] of SOURCES) { srcBoxes[k].checked = !!src[k]; srcBoxes[k].disabled = false; }
+    boards.value = (Array.isArray(s.boards) ? s.boards : []).join('\n');
+    skip.value = str(b.skipCompanies).replace(/\n$/, '');
+    ed.ta.value = str(b.resume).replace(/\n$/, '');
+    auto.checked = !!s.autoScan;
+    for (const el of [boards, skip, ed.ta, auto]) el.disabled = false;
+    if (b.dataDir) dataPath.textContent = b.dataDir;
+    snap = values();
+    checkBoards();
+    syncDirty();
+    syncAi();
+    if (opts.focus === 'resume') {
+      document.getElementById('resume-section').scrollIntoView({ block: 'start' });
+      ed.ta.focus({ preventScroll: true });
+    }
+  });
+};
+
+// =====================================================================
+// Start
+// =====================================================================
+// A file dropped on a WebView2 window would navigate away from the app, so
+// file drops are refused everywhere except fields marked data-drop.
+const hasFiles = (e) => !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'));
+const dropZone = (e) => (e.target && e.target.closest ? e.target.closest('[data-drop]') : null);
+document.addEventListener('dragover', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = dropZone(e) && !dropZone(e).disabled ? 'copy' : 'none';
+});
+document.addEventListener('drop', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  const zone = dropZone(e);
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (zone && file && !zone.disabled) zone.dispatchEvent(new CustomEvent('filedrop', { detail: file }));
+});
+
+window.addEventListener('hashchange', () => {
+  const k = readHashTab();
+  if (S.screen === 'tracker' && k && k !== S.tab) setTab(k);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (S.screen !== 'tracker' || e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (S.ui.search) { e.preventDefault(); S.ui.search.focus(); S.ui.search.select(); }
+});
+
+setInterval(() => { if (S.screen === 'tracker') renderMeta(); }, 60000);
+window.addEventListener('resize', syncTabFade);
+
+async function init() {
+  app = document.getElementById('app');
+  app.append(h('p', { class: 'boot' }, 'Loading…'));
+  const b = await call('bootstrap');
+  if (b.error) { fatal(b.error); return; }
+  S.boot = b;
+  S.settings = b.settings || {};
+  S.state = b.state || {};
+  S.hasResume = !!b.hasResume;
+  go(S.settings.onboarded ? 'tracker' : 'landing');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+})();
+</script>
+</head>
+<body>
+<div id="app"></div>
+<noscript><p style="padding:24px">SearchShip needs JavaScript to run.</p></noscript>
+</body>
+</html>

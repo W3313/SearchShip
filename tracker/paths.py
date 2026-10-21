@@ -7,7 +7,7 @@ from . import APP_NAME
 
 
 def resource_dir() -> Path:
-    """Folder holding scan.py, CLAUDE.md, skip_companies.txt and tracker/ui.
+    """Folder holding scan.py, prep_rules.md, skip_companies.txt and tracker/ui.
 
     In a PyInstaller build that is the unpacked bundle (sys._MEIPASS);
     in a source checkout it is the repository root.

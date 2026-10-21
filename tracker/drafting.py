@@ -7,6 +7,7 @@ import json
 
 from . import sources
 from .paths import resource
+from .store import touched
 
 DASHES = ("—", "–")  # em dash, en dash
 PREP_FIELDS = ("fit", "project", "why")
@@ -117,10 +118,23 @@ def validate_drafts(result, ids) -> tuple:
     return accepted, problems
 
 
+def merge_notes(old: str, new: str) -> str:
+    """Add the AI's note below whatever is already there; never drop the user's."""
+    old, new = str(old or "").strip(), str(new or "").strip()
+    if not new or new in old:
+        return old
+    return f"{old}\n{new}" if old else new
+
+
 def apply_drafts(store, accepted: dict, snapshot: dict) -> dict:
     """Write accepted drafts, but only to rows the user has not changed since
-    the AI started (same status and `updated` as in `snapshot`)."""
-    counts = {"ready": 0, "skipped": 0, "changedMeanwhile": 0}
+    the AI started (same status and `updated` as in `snapshot`).
+
+    The AI's notes are appended, never replacing the user's. On a row the
+    user has already acted on (touched), a "skipped" answer is only advice:
+    the reason goes into notes and the status stays as the user left it.
+    """
+    counts = {"ready": 0, "skipped": 0, "advised": 0, "changedMeanwhile": 0}
     with store.lock:
         postings = store.load_postings()
         for pid, change in accepted.items():
@@ -128,14 +142,18 @@ def apply_drafts(store, accepted: dict, snapshot: dict) -> dict:
             if row is None or (row.get("status"), row.get("updated")) != snapshot.get(pid):
                 counts["changedMeanwhile"] += 1
                 continue
-            row["status"] = change["status"]
             if change["status"] == "ready":
+                row["status"] = "ready"
                 row["prep"] = change["prep"]
-                if change["notes"]:
-                    row["notes"] = change["notes"]
+                row["notes"] = merge_notes(row.get("notes"), change["notes"])
+                counts["ready"] += 1
+            elif touched(row):
+                row["notes"] = merge_notes(row.get("notes"), "AI suggests skipping: " + change["notes"])
+                counts["advised"] += 1
             else:
-                row["notes"] = change["notes"]
-            counts[change["status"]] += 1
+                row["status"] = "skipped"
+                row["notes"] = merge_notes(row.get("notes"), change["notes"])
+                counts["skipped"] += 1
         store.save_postings(postings)
     return counts
 
@@ -148,7 +166,7 @@ def draft_rows(store, provider, ids, log=print) -> dict:
     postings = store.load_postings()
     rows = {pid: postings[pid] for pid in ids if pid in postings}
     if not rows:
-        return {"ready": 0, "skipped": 0, "changedMeanwhile": 0, "problems": []}
+        return {"ready": 0, "skipped": 0, "advised": 0, "changedMeanwhile": 0, "problems": []}
     snapshot = {pid: (r.get("status"), r.get("updated")) for pid, r in rows.items()}
     log(f"Asking {provider.label} to draft prep for {len(rows)} posting(s)…")
     result = provider.run_json(draft_prompt(rows, resume, prep_rules()), DRAFT_SCHEMA, web=True)

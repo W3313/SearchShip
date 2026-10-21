@@ -8,6 +8,7 @@
 """
 import argparse
 import json
+import os
 import sys
 import threading
 import time
@@ -24,6 +25,31 @@ def _redirect_output_if_windowed(store_root):
         log = open(path, "a", encoding="utf-8", buffering=1)
         sys.stdout = sys.stdout or log
         sys.stderr = sys.stderr or log
+
+
+_INSTANCE_MUTEX = []
+
+
+def _focus_running_copy() -> bool:
+    """Windows: if SearchShip is already open, bring it forward and return True.
+    Two copies would write the same data files over each other."""
+    if os.name != "nt":
+        return False
+    import ctypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.restype = ctypes.c_void_p
+    handle = kernel32.CreateMutexW(None, False, "Local\\SearchShip.SingleInstance")
+    if ctypes.get_last_error() != 183:  # ERROR_ALREADY_EXISTS
+        _INSTANCE_MUTEX.append(handle)  # held until the process exits
+        return False
+    user32 = ctypes.WinDLL("user32")
+    hwnd = user32.FindWindowW(None, APP_NAME)
+    if hwnd:
+        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        user32.SetForegroundWindow(hwnd)
+    else:
+        user32.MessageBoxW(None, f"{APP_NAME} is already open.", APP_NAME, 0x40)
+    return True
 
 
 def _windows_prefers_dark() -> bool:
@@ -43,6 +69,8 @@ def run_gui(store):
     from .jobs import JobRunner
     from .paths import resource
 
+    if _focus_running_copy():
+        return None
     jobs = JobRunner(store)
     api = Api(store, jobs)
     window = webview.create_window(
@@ -64,7 +92,9 @@ def run_gui(store):
     def on_start():
         threading.Thread(target=auto_scan, name="searchship-auto", daemon=True).start()
 
-    webview.start(on_start, private_mode=False, storage_path=str(store.root / "webview"))
+    # Private mode gives each launch its own local port; the UI only keeps the
+    # last tab in localStorage, so nothing important is lost between launches.
+    webview.start(on_start, private_mode=True)
     return window
 
 
@@ -104,7 +134,7 @@ def cmd_check_boards(store):
     return 0 if ok else 1
 
 
-def cmd_selftest(store, out):
+def cmd_selftest(store, out, gui=False):
     """Import every module, find bundled files, and run one merge offline."""
     import scan as scanner
     from . import actions, ai, api, drafting, jobs, pipeline, sources  # noqa: F401
@@ -132,17 +162,111 @@ def cmd_selftest(store, out):
         lines.append(f"pywebview: {e}")
         raise SystemExit("\n".join(lines))
     lines.append("selftest: ok")
+    code = 0
+    if gui:
+        code = _selftest_gui(store, lines, out)
     text = "\n".join(lines)
     if out:
         with open(out, "w", encoding="utf-8") as f:
             f.write(text + "\n")
     print(text)
-    return 0
+    return code
+
+
+def _selftest_gui(store, lines, out, timeout=90):
+    """Hidden `selftest --gui` used by the Windows build: open the real window,
+    wait for the page and the JS bridge (bootstrap) to answer, then close.
+    Appends result lines; returns 0 on success, 1 on failure."""
+    import os
+    import webview
+
+    from .api import Api
+    from .jobs import JobRunner
+    from .paths import resource
+
+    done = threading.Event()
+    failed = []
+
+    def fail(msg):
+        failed.append(msg)
+        lines.append(f"gui: FAIL {msg}")
+
+    def watchdog():
+        # A wedged GUI loop must not hang the build: record the failure and exit.
+        if not done.wait(timeout * 2 + 30):
+            fail("timed out")
+            if out:
+                with open(out, "w", encoding="utf-8") as f:
+                    f.write("\n".join(lines) + "\n")
+            print("\n".join(lines))
+            os._exit(1)
+
+    window = webview.create_window(
+        f"{APP_NAME} selftest", url=str(resource("tracker", "ui", "index.html")),
+        js_api=Api(store, JobRunner(store)), width=900, height=700,
+    )
+
+    def wait_for(script, deadline):
+        while time.time() < deadline:
+            value = window.evaluate_js(script)
+            if value:
+                return value
+            time.sleep(0.5)
+        return None
+
+    def probe():
+        try:
+            deadline = time.time() + timeout
+            if not window.events.loaded.wait(timeout):
+                raise RuntimeError("the page did not load")
+            lines.append(f"webview renderer: {webview.renderer}")
+            if os.name == "nt" and webview.renderer != "edgechromium":
+                raise RuntimeError("Microsoft Edge WebView2 is not in use")
+            window.evaluate_js(
+                "window.__searchshipSelftest = null;"
+                "window.pywebview.api.bootstrap().then("
+                "function (r) { window.__searchshipSelftest = r || {error: 'empty answer'}; },"
+                "function (e) { window.__searchshipSelftest = {error: String(e)}; }); true")
+            boot = wait_for("window.__searchshipSelftest", deadline)
+            if not isinstance(boot, dict):
+                raise RuntimeError("the JS bridge did not answer bootstrap()")
+            if boot.get("error"):
+                raise RuntimeError(f"bootstrap(): {boot['error']}")
+            lines.append(f"bridge: bootstrap() -> version {boot.get('version')}")
+            # The page's own start-up also calls bootstrap, then draws its first screen.
+            screen = wait_for(
+                "(function () { var a = document.getElementById('app');"
+                " if (!a || a.querySelector('.boot')) return '';"
+                " var h = a.querySelector('h1, h2');"
+                " return (h ? h.textContent : a.textContent || '').trim().slice(0, 80); })()", deadline)
+            if not screen:
+                raise RuntimeError("the page did not draw its first screen")
+            lines.append(f"ui: {screen}")
+            if "could not start" in screen:
+                raise RuntimeError("the page showed its start-up error")
+            lines.append("gui: ok")
+        except Exception as e:
+            fail(str(e) or e.__class__.__name__)
+        finally:
+            done.set()
+            window.destroy()
+
+    threading.Thread(target=watchdog, name="searchship-selftest-watchdog", daemon=True).start()
+    try:
+        webview.start(probe, private_mode=True)
+    except Exception as e:
+        fail(f"webview.start: {e}")
+    if not failed and not done.wait(15):
+        fail("the window closed before the check finished")
+    done.set()
+    return 1 if failed or "gui: ok" not in lines else 0
 
 
 def main(argv=None):
+    from .paths import data_dir
     from .store import Store
 
+    _redirect_output_if_windowed(data_dir())  # before argparse, so --help reaches the log
     ap = argparse.ArgumentParser(prog=APP_NAME)
     ap.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
     sub = ap.add_subparsers(dest="command")
@@ -156,10 +280,10 @@ def main(argv=None):
     sub.add_parser("check-boards", help="fetch every configured career board")
     s = sub.add_parser("selftest", help="offline smoke test")
     s.add_argument("--out")
+    s.add_argument("--gui", action="store_true", help=argparse.SUPPRESS)  # window smoke test (CI)
     args = ap.parse_args(argv)
 
     store = Store()
-    _redirect_output_if_windowed(store.root)
     if args.command == "serve":
         from .api import Api
         from .devserver import serve
@@ -171,7 +295,7 @@ def main(argv=None):
     if args.command == "check-boards":
         return cmd_check_boards(store)
     if args.command == "selftest":
-        return cmd_selftest(store, args.out)
+        return cmd_selftest(store, args.out, args.gui)
     run_gui(store)
     return 0
 

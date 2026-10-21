@@ -3,7 +3,9 @@ desktop window cannot start). Serves on 127.0.0.1 only.
 
 Requests must carry an X-SearchShip header. Browsers only send a custom
 header after a CORS preflight, which this server never approves, so other
-websites cannot call the API.
+websites cannot call the API. The Host header must name 127.0.0.1 or
+localhost, which stops DNS-rebinding pages that would otherwise count as
+same-origin.
 """
 import json
 import threading
@@ -32,15 +34,22 @@ def make_handler(api):
             self.wfile.write(data)
 
         def do_GET(self):
+            if not self._local_host():
+                return self._send(403, "forbidden", "text/plain")
             if self.path.split("?")[0] not in ("/", "/index.html"):
                 return self._send(404, "not found", "text/plain")
             html = resource("tracker", "ui", "index.html").read_text(encoding="utf-8")
             html = html.replace(MARKER, "<script>window.SEARCHSHIP_HTTP_API = true;</script>", 1)
             self._send(200, html, "text/html")
 
+        def _local_host(self):
+            # A DNS-rebinding page shares our port but not our Host header.
+            port = self.server.server_address[1]
+            return self.headers.get("Host") in (f"127.0.0.1:{port}", f"localhost:{port}")
+
         def do_POST(self):
             name = self.path[len("/api/"):] if self.path.startswith("/api/") else ""
-            if self.headers.get("X-SearchShip") != "1" or name not in public:
+            if not self._local_host() or self.headers.get("X-SearchShip") != "1" or name not in public:
                 return self._send(403, json.dumps({"error": "forbidden"}))
             try:
                 length = int(self.headers.get("Content-Length") or 0)

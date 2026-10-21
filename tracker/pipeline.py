@@ -58,7 +58,12 @@ def fetch_all(settings: dict, get=sources.http_get_json, log=print):
                 fetched.append(Fetched(sources.ATS_LABELS[ats], rows,
                                        lambda pid, row, p=prefix: pid.lower().startswith(p)))
             except Exception as e:
-                errors.append(f"{spec}: {e}")
+                try:
+                    ats, _, name = sources.parse_board(spec)
+                    label = f"{name} ({sources.ATS_LABELS[ats]})"
+                except sources.SourceError:
+                    label = spec
+                errors.append(f"{label}: {e}")
         log(f"Career boards: {sum(len(f.listings) for f in fetched if f.label in sources.ATS_LABELS.values())} internship listings")
     return fetched, errors
 
@@ -77,21 +82,40 @@ def merge(postings: dict, fetched: list, skip_co: set, added_at: str = None,
       and only those scoring at least DRAFT_MIN_SCORE.
     """
     added_at = added_at or now_iso()
-    known_urls = {sources.url_key(r.get("url", "")) for r in postings.values() if r.get("url")}
-    known_pairs = {(str(r.get("company", "")).strip().lower(), str(r.get("title", "")).strip().lower())
-                   for r in postings.values()}
 
-    combined, source_of = [], {}
+    def row_keys(rows):
+        urls = {sources.url_key(r.get("url", "")) for r in rows if r.get("url")}
+        pairs = {_pair(r.get("company"), r.get("title")) for r in rows}
+        return urls, pairs
+
+    # Tracked rows, and the subset that came from a source other than SimplifyJobs.
+    known_urls, known_pairs = row_keys(postings.values())
+    other_urls, other_pairs = row_keys([r for r in postings.values() if r.get("source") != "SimplifyJobs"])
+    # Live Summer 2027 SimplifyJobs listings. Another source's copy of one of
+    # these is dropped so the job is tracked once, under its SimplifyJobs id.
+    # (Inactive or older SimplifyJobs rows are ignored: last year's "Software
+    # Engineer Intern" must not hide this year's board posting.)
+    live = [x for f in fetched if f.label == "SimplifyJobs" for x in f.listings
+            if isinstance(x, dict) and x.get("active") and "Summer 2027" in x.get("terms", [])]
+    live_urls = {sources.url_key(x.get("url", "")) for x in live if x.get("url")}
+    live_pairs = {_pair(x.get("company_name"), x.get("title")) for x in live}
+
+    combined, source_of, run_urls = [], {}, set()
     for f in fetched:
         for x in f.listings:
             if not isinstance(x, dict) or "id" not in x or x["id"] in source_of:
                 continue
-            key = sources.url_key(x.get("url", ""))
-            if f.label != "SimplifyJobs":
-                pair = (str(x.get("company_name", "")).strip().lower(), str(x.get("title", "")).strip().lower())
-                if key in known_urls or pair in known_pairs:
+            key = sources.url_key(x.get("url", "")) if x.get("url") else None
+            pair = _pair(x.get("company_name"), x.get("title"))
+            if f.label == "SimplifyJobs":
+                # Already tracked under a board / web / list id from an earlier run.
+                if x["id"] not in postings and (key in other_urls or pair in other_pairs):
                     continue
-            known_urls.add(key)
+            elif (key in known_urls or key in live_urls or key in run_urls
+                  or pair in known_pairs or pair in live_pairs):
+                continue
+            if key:
+                run_urls.add(key)
             source_of[x["id"]] = f.label
             combined.append(x)
 
@@ -129,6 +153,10 @@ def merge(postings: dict, fetched: list, skip_co: set, added_at: str = None,
                     key=lambda kv: (kv[1]["score"], kv[1]["posted"]), reverse=True)
     to_draft = [pid for pid, _ in ranked[:DRAFT_CAP]]
     return new_rows, closed, to_draft
+
+
+def _pair(company, title):
+    return (str(company or "").strip().lower(), str(title or "").strip().lower())
 
 
 def summary_line(n_new: int, n_drafted: int, n_closed: int) -> str:

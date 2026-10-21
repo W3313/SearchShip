@@ -6,12 +6,13 @@ instead of raising, so the UI can show them inline.
 """
 import functools
 import json
+from concurrent.futures import ThreadPoolExecutor
 import os
 import subprocess
 import sys
 import webbrowser
 
-from . import __version__, actions, ai
+from . import __version__, actions, ai, sources
 from .jobs import connected_provider
 
 
@@ -51,7 +52,10 @@ class Api:
     # AI sign-in -----------------------------------------------------------------
     @_safe
     def providers(self):
-        return {name: p.status() for name, p in ai.PROVIDERS.items()}
+        # Each check starts a CLI process; run them side by side.
+        with ThreadPoolExecutor(max_workers=len(ai.PROVIDERS)) as pool:
+            futures = {name: pool.submit(p.status) for name, p in ai.PROVIDERS.items()}
+            return {name: f.result() for name, f in futures.items()}
 
     @_safe
     def provider_status(self, name):
@@ -85,13 +89,19 @@ class Api:
         if isinstance(updates.get("boards"), str):
             updates["boards"] = updates["boards"].splitlines()
         allowed = {k: updates[k] for k in ("sources", "boards", "autoScan", "provider") if k in updates}
-        return {"settings": self._store.save_settings(allowed)}
+        board_errors = []
+        for line in allowed.get("boards") or []:
+            if str(line).strip():
+                try:
+                    sources.parse_board(str(line))
+                except sources.SourceError as e:
+                    board_errors.append(str(e))
+        return {"settings": self._store.save_settings(allowed), "boardErrors": board_errors}
 
     @_safe
     def save_resume(self, text):
-        if not str(text or "").strip():
-            raise ValueError("The resume is empty.")
-        self._store.save_resume(str(text))
+        # Empty is allowed (clears it); drafting then asks for a resume.
+        self._store.save_resume(str(text or ""))
         return {"ok": True}
 
     @_safe

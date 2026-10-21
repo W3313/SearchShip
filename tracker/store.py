@@ -192,8 +192,9 @@ class Store:
             return ""
 
     def save_resume(self, text: str) -> None:
+        text = (text or "").strip()
         with self.lock:
-            write_atomic(self.resume_path, (text or "").strip() + "\n")
+            write_atomic(self.resume_path, text + "\n" if text else "")
 
     def skip_text(self) -> str:
         return self.skip_path.read_text(encoding="utf-8")
